@@ -1,0 +1,2 @@
+ibis-framework >= 0.10
+pandas >= 0.19
