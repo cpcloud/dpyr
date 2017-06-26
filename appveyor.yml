@@ -1,0 +1,33 @@
+build: off
+
+platform:
+  - x64
+
+environment:
+  PGUSER: "postgres"
+  PGPASSWORD: "Password12!"
+  TEST_POSTGRES_DB: "dpyr"
+  TEST_CRUNCHBASE_DB: "%USERPROFILE%\\crunchbase.db"
+  TEST_SQLITE_DB_PATH: "%USERPROFILE%\\ibis-testing-data\\ibis_testing.db"
+  DIAMONDS_CSV: "%USERPROFILE%\\diamonds.csv"
+  PG: "\"C:\\Program Files\\PostgreSQL\\9.6\\bin\""
+
+  matrix:
+    - PYTHON: "C:\\Python34-x64\\python.exe"
+    - PYTHON: "C:\\Python35-x64\\python.exe"
+
+services:
+  - postgresql
+
+test_script:
+  - "%PYTHON% -m pip install -U pip"
+  - "%PYTHON% -m pip install -U setuptools"
+  - "%PYTHON% -m pip install -e .\"[develop]\""
+  - "%PYTHON% -m pip install -U tox"
+
+  - "curl -o %TEST_CRUNCHBASE_DB% https://storage.googleapis.com/ibis-ci-data/crunchbase.db"
+  - "curl -o ibis-testing-data.tar.gz https://storage.googleapis.com/ibis-ci-data/ibis-testing-data.tar.gz"
+  - "7z x ibis-testing-data.tar.gz"
+  - "7z x ibis-testing-data.tar"
+  - "%PG%\\createdb.exe %TEST_POSTGRES_DB%"
+  - "%PYTHON% -m tox"

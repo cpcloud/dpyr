@@ -8,7 +8,13 @@ with open('README.md', 'rt') as f:
 
 
 with open('requirements.txt', 'rt') as f:
-    install_requires = list(map(str.strip, f))
+    install_requires = [line.strip() for line in f]
+
+
+all_requires = [
+    'ibis-framework[impala, kerberos, pandas, postgres, sqlite, visualization]'
+]
+develop_requires = all_requires + ['flake8', 'pytest >= 3']
 
 
 setup(
@@ -18,12 +24,13 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require={
-        'all': ['ibis-framework[impala, kerberos, pandas, postgres, sqlite]'],
-        'develop': ['flake8', 'pytest >= 3'],
+        'all': all_requires,
+        'develop': develop_requires,
         'impala': ['ibis-framework[impala, kerberos]'],
         'pandas': ['ibis-framework[pandas]'],
         'postgres': ['ibis-framework[postgres]'],
         'sqlite': ['ibis-framework[sqlite]'],
+        'visualization': ['ibis-framework[visualization]'],
     },
     description=(
         'Python dplyr operations for SQL databases and pandas DataFrames'

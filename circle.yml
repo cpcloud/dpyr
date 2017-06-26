@@ -1,0 +1,36 @@
+machine:
+  python:
+    version: 3.6.1
+  pre:
+    # upgrade sqlite3 to # make sure we have the "instr" function available
+    - sudo apt-get -qq install --only-upgrade sqlite3
+    # clang/boost for UDFs and graphviz for visualization
+    - sudo apt-get -qq install clang libboost-dev graphviz
+  environment:
+    TEST_SQLITE_DB_PATH: $HOME/ibis-testing-data/ibis_testing.db
+    TEST_POSTGRES_DB: circle_test
+    DIAMONDS_CSV: $HOME/ibis-testing-data/diamonds.csv
+    TEST_CRUNCHBASE_DB: $HOME/crunchbase.db
+  post:
+    # download the crunchbase sqlite database, for lineage testing
+    - wget https://storage.googleapis.com/ibis-ci-data/crunchbase.db
+
+    # download the data
+    - wget https://storage.googleapis.com/ibis-ci-data/ibis-testing-data.tar.gz
+
+    # untar it
+    - tar xvzf ibis-testing-data.tar.gz
+
+dependencies:
+  override:
+    - pip install -U pip
+    - cd $(pyenv root); git pull
+    - pip install -U tox tox-pyenv
+    - pyenv install --skip-existing 3.4.4
+    - pyenv install --skip-existing 3.5.3
+    - pyenv install --skip-existing 3.6.1
+    - pyenv local 3.4.4 3.5.3 3.6.1
+
+test:
+  override:
+    - tox -e py34,py35,py36
