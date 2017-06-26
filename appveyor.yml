@@ -9,12 +9,16 @@ environment:
   TEST_POSTGRES_DB: "dpyr"
   TEST_CRUNCHBASE_DB: "%USERPROFILE%\\crunchbase.db"
   TEST_SQLITE_DB_PATH: "%USERPROFILE%\\ibis-testing-data\\ibis_testing.db"
-  DIAMONDS_CSV: "%USERPROFILE%\\diamonds.csv"
+  DIAMONDS_CSV: "%USERPROFILE%\\ibis-testing-data\\diamonds.csv"
   PG: "\"C:\\Program Files\\PostgreSQL\\9.6\\bin\""
 
   matrix:
     - PYTHON: "C:\\Python34-x64\\python.exe"
+      TOX_ENV: "py34"
     - PYTHON: "C:\\Python35-x64\\python.exe"
+      TOX_ENV: "py35"
+    - PYTHON: "C:\\Python36-x64\\python.exe"
+      TOX_ENV: "py36"
 
 services:
   - postgresql
@@ -30,4 +34,4 @@ test_script:
   - "7z x ibis-testing-data.tar.gz"
   - "7z x ibis-testing-data.tar"
   - "%PG%\\createdb.exe %TEST_POSTGRES_DB%"
-  - "%PYTHON% -m tox"
+  - "%PYTHON% -m tox -e %TOX_ENV%"
