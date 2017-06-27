@@ -32,6 +32,8 @@ test:
     - multipledispatch
     - pytest >=3
     - python-graphviz
+  imports:
+    - dpyr
   commands:
     - pytest --tb=short --pyargs dpyr
 
