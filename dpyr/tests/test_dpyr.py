@@ -62,7 +62,7 @@ def diamonds(client):
 
 @pytest.fixture
 def other_diamonds(client):
-    return client.table('other_diamonds').head(1000)
+    return client.table('diamonds').view().head(1000)
 
 
 def test_dplyr(diamonds):
