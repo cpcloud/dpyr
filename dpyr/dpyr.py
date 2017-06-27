@@ -7,6 +7,7 @@ import pandas as pd
 
 import ibis
 import ibis.expr.types as ir
+import ibis.expr.datatypes as dt
 import ibis.expr.operations as ops
 
 from ibis.expr.groupby import GroupedTableExpr
@@ -58,6 +59,9 @@ class Value(Keyed):
 
     def __call__(self, other: ir.Expr) -> ir.Expr:
         return self.resolve(other, {X: other})
+
+    def __rrshift__(self, other: ir.Expr) -> ir.Expr:
+        return self(other)
 
     def __add__(self, other) -> 'Add':
         return Add(self, other)
@@ -482,7 +486,8 @@ class transmute(Verb, Keyed):
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
         columns = [
-            column.name(name) for name, column in self.mutations.items()
+            column.resolve(expr, {X: expr}).name(name)
+            for name, column in self.mutations.items()
         ]
         return expr.projection(columns)
 
@@ -597,6 +602,18 @@ class distinct(Verb):
         ])
 
 
+class cast(Verb):
+
+    __slots__ = 'column', 'to',
+
+    def __init__(self, column: Value, to: Union[str, dt.DataType]) -> None:
+        self.column = column
+        self.to = to
+
+    def __call__(self, expr: ir.TableExpr) -> ir.ColumnExpr:
+        return self.column.resolve(expr, {X: expr}).cast(self.to)
+
+
 Result = Union[pd.DataFrame, pd.Series, str, float, int]
 
 
@@ -605,12 +622,16 @@ class do:
     __slots__ = 'execute',
 
     def __init__(
-        self, execute: Callable=operator.methodcaller('execute')
+        self,
+        execute: Callable[[ir.Expr], Result]=operator.methodcaller('execute')
     ) -> None:
         self.execute = execute
 
     def __call__(self, expr: ir.Expr) -> Result:
         return self.execute(expr)
+
+    def __rrshift__(self, other: ir.Expr) -> Result:
+        return self(other)
 
 
 def from_dataframe(
