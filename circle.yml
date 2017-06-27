@@ -30,7 +30,7 @@ machine:
           y DOUBLE PRECISION,
           z DOUBLE PRECISION
         ) SERVER dpyr_testing
-        OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'CSV', HEADER 'TRUE', DELIMITER ',');
+        OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'csv', HEADER 'TRUE', DELIMITER ',');
       EOF
 
 dependencies:
