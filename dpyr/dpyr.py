@@ -9,6 +9,8 @@ import ibis
 import ibis.expr.types as ir
 import ibis.expr.operations as ops
 
+from ibis.expr.groupby import GroupedTableExpr
+
 
 class Keyed:
     """Objects that can be accessed by ``__getitem__`` or ``__getattr__``.
@@ -21,21 +23,43 @@ class Keyed:
     __slots__ = ()
 
     def __getitem__(self, name: str) -> 'Item':
-        return Item(name, self)
+        return Item(name, self)  # type: ignore
 
     def __getattr__(self, name: str) -> 'Attribute':
         if name.startswith('_') and name.endswith('_'):
             raise AttributeError(name)
-        return Attribute(name, self)
+        return Attribute(name, self)  # type: ignore
 
 
-class BinaryOperations:
+Scope = Dict['Value', ir.Expr]
 
-    """A mixin class implementing binary operations."""
 
-    __slots__ = ()
+class Value(Keyed):
 
-    def __add__(self, other: 'Value') -> 'Add':
+    """A generic value class forming the basis for dpyr expressions.
+
+    Parameters
+    ----------
+    name : str
+    expr : Value
+    """
+
+    __slots__ = 'name', 'expr'
+
+    def __init__(self, name: str, expr: Optional['Value']) -> None:
+        self.name = name
+        self.expr = expr
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.expr))
+
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
+        return scope.get(self, expr)
+
+    def __call__(self, other: ir.Expr) -> ir.Expr:
+        return self.resolve(other, {X: other})
+
+    def __add__(self, other) -> 'Add':
         return Add(self, other)
 
     def __sub__(self, other):
@@ -78,36 +102,6 @@ class BinaryOperations:
         return Ge(self, other)
 
 
-Scope = Optional[Union[Dict[Keyed, ir.Expr], Dict['Value', ir.Expr]]]
-
-
-class Value(Keyed, BinaryOperations):
-
-    """A generic value class forming the basis for dpyr expressions.
-
-    Parameters
-    ----------
-    name : str
-    parent : Value
-    """
-
-    __slots__ = 'name', 'parent'
-
-    def __init__(
-        self,
-        name: Optional[str]=None,
-        parent: Optional[Union[Keyed, 'Value']]=None
-    ) -> None:
-        self.name = name
-        self.parent = parent
-
-    def __hash__(self) -> int:
-        return hash((self.name, self.parent))
-
-    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return scope.get(self, expr)
-
-
 class Binary(Value, metaclass=abc.ABCMeta):
 
     """A class that implements :meth:`dpyr.Value.resolve` for binary
@@ -135,9 +129,6 @@ class Binary(Value, metaclass=abc.ABCMeta):
             right = self.right
         return self.operate(left, right)
 
-    def __call__(self, other: ir.Expr) -> ir.Expr:
-        return self.resolve(other, {X: other})
-
 
 class Unary(Value):
 
@@ -150,8 +141,8 @@ class Unary(Value):
     def operate(self, expr: ir.Expr) -> ir.Expr:
         pass
 
-    def resolve(self, operand: ir.Expr, scope: Scope) -> ir.Expr:
-        return self.operate(self.operand.resolve(operand, scope))
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
+        return self.operate(self.operand.resolve(expr, scope))
 
 
 class Add(Binary):
@@ -215,47 +206,47 @@ class Eq(Binary):
     __slots__ = ()
 
     def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
-        return left == right 
-    operate = operator.eq
+        return left == right
 
 
 class Ne(Binary):
 
     __slots__ = ()
 
-    operate = operator.ne
+    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+        return left != right
 
 
 class Lt(Binary):
 
     __slots__ = ()
 
-    operate = operator.lt
+    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+        return left < right
 
 
 class Le(Binary):
 
     __slots__ = ()
 
-    operate = operator.le
+    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+        return left <= right
 
 
 class Gt(Binary):
 
     __slots__ = ()
 
-    @property
-    def operate(self):
-        return operator.gt
+    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+        return left > right
 
 
 class Ge(Binary):
 
     __slots__ = ()
 
-    @property
-    def operate(self):
-        return operator.ge
+    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+        return left >= right
 
 
 class Getter(Value):
@@ -263,14 +254,14 @@ class Getter(Value):
     __slots__ = ()
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        try:
-            parent = scope[self.parent]
-        except KeyError:
-            parent = expr
-        return parent[self.name]
+        assert self.expr is not None
 
-    def __call__(self, expr: ir.Expr) -> ir.Expr:
-        return self.resolve(expr, {X: expr})
+        try:
+            result = scope[self.expr]
+        except KeyError:
+            result = expr
+
+        return result[self.name]
 
 
 class Attribute(Getter):
@@ -278,7 +269,7 @@ class Attribute(Getter):
     __slots__ = ()
 
     def __repr__(self) -> str:
-        return '{0.parent}.{0.name}'.format(self)
+        return '{0.expr}.{0.name}'.format(self)
 
 
 class Item(Getter):
@@ -286,7 +277,7 @@ class Item(Getter):
     __slots__ = ()
 
     def __repr__(self) -> str:
-        return '{0.parent}[{0.name!r}]'.format(self)
+        return '{0.expr}[{0.name!r}]'.format(self)
 
 
 class desc(Value):
@@ -294,14 +285,16 @@ class desc(Value):
     __slots__ = ()
 
     def __init__(self, expr: Value) -> None:
-        super().__init__(parent=expr)
+        super().__init__('desc', expr=expr)
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return ibis.desc(self.parent.resolve(expr, scope))
+        assert self.expr is not None
+        resolved = self.expr.resolve(expr, scope)
+        return ibis.desc(resolved)
 
 
-X = Value('X')
-Y = Value('Y')
+X = Value('X', None)
+Y = Value('Y', None)
 
 
 class Verb(metaclass=abc.ABCMeta):
@@ -310,7 +303,7 @@ class Verb(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def __call__(self, other: ir.Expr) -> ir.Expr:
-        pass
+        raise NotImplementedError('{}.__call__'.format(type(self).__name__))
 
     def __rrshift__(self, other: ir.Expr) -> ir.Expr:
         return self(other)
@@ -326,7 +319,7 @@ class groupby(Verb, Keyed):
     def __init__(self, *keys: Value) -> None:
         self.keys = keys
 
-    def __call__(self, expr: ir.TableExpr) -> ir.GroupedTableExpr:
+    def __call__(self, expr: ir.TableExpr) -> GroupedTableExpr:
         return expr.groupby([
             key.resolve(expr, {X: expr}) for key in self.keys
         ])
@@ -372,7 +365,7 @@ class summarize(Verb, Keyed):
     def __init__(self, **metrics: ir.Expr) -> None:
         self.metrics = sorted(metrics.items(), key=operator.itemgetter(0))
 
-    def __call__(self, grouped: ir.GroupedTableExpr) -> ir.Expr:
+    def __call__(self, grouped: GroupedTableExpr) -> ir.Expr:
         return grouped.aggregate([
             operation(grouped.table).name(name)
             for name, operation in self.metrics
@@ -507,7 +500,7 @@ class sort_by(Verb, Keyed):
         ])
 
 
-JoinKey = Union[List[Value], List[str]]
+JoinKey = Union[Value, List[Value], List[str]]
 
 
 class On:
@@ -591,18 +584,23 @@ class anti_join(join):
 
 class distinct(Verb):
 
+    __slots__ = 'expressions',
+
     def __init__(
         self, **expressions: Union[ir.TableExpr, ir.ColumnExpr]
     ) -> None:
         self.expressions = expressions
 
-    def __call__(self, expr):
+    def __call__(self, expr: Union[ir.ColumnExpr, ir.TableExpr]):
         return expr.projection([
             e.distinct().name(name) for name, e in self.expressions.items()
         ])
 
 
-class do(object):
+Result = Union[pd.DataFrame, pd.Series, str, float, int]
+
+
+class do:
 
     __slots__ = 'execute',
 
@@ -611,9 +609,7 @@ class do(object):
     ) -> None:
         self.execute = execute
 
-    def __call__(self, expr: ir.Expr) -> Union[
-        pd.DataFrame, pd.Series, str, float, int
-    ]:
+    def __call__(self, expr: ir.Expr) -> Result:
         return self.execute(expr)
 
 
