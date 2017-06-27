@@ -18,19 +18,19 @@ machine:
     - psql $TEST_POSTGRES_DB -c 'CREATE SERVER dpyr_testing FOREIGN DATA WRAPPER file_fdw'
     - >
       psql $TEST_POSTGRES_DB <<EOF
-      CREATE FOREIGN TABLE diamonds (
-        carat DOUBLE PRECISION,
-        cut TEXT,
-        color TEXT,
-        clarity TEXT,
-        depth DOUBLE PRECISION,
-        "table" DOUBLE PRECISION,
-        price INTEGER,
-        x DOUBLE PRECISION,
-        y DOUBLE PRECISION,
-        z DOUBLE PRECISION
-      ) SERVER dpyr_testing
-      OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'CSV', HEADER 'TRUE', DELIMITER ',');
+        CREATE FOREIGN TABLE diamonds (
+          carat DOUBLE PRECISION,
+          cut TEXT,
+          color TEXT,
+          clarity TEXT,
+          depth DOUBLE PRECISION,
+          "table" DOUBLE PRECISION,
+          price INTEGER,
+          x DOUBLE PRECISION,
+          y DOUBLE PRECISION,
+          z DOUBLE PRECISION
+        ) SERVER dpyr_testing
+        OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'CSV', HEADER 'TRUE', DELIMITER ',');
       EOF
 
 dependencies:
