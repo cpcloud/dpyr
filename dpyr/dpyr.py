@@ -55,7 +55,7 @@ class Value(Keyed):
         return hash((self.name, self.expr))
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return scope.get(self, expr)
+        return expr
 
     def __call__(self, other: ir.Expr) -> ir.Expr:
         return self.resolve(other, {X: other})
@@ -397,8 +397,10 @@ class Reduction(Value):
         self.func = operator.attrgetter(type(self).__name__.lower())
 
     def __call__(self, expr: ir.Expr) -> ir.Expr:
+        return self.resolve(expr, {X: expr})
+
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         where = self.where
-        scope = {X: expr}
         column = self.column.resolve(expr, scope)
         return self.func(column)(
             where=where.resolve(expr, scope) if where is not None else where
