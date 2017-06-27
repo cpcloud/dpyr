@@ -31,6 +31,7 @@ machine:
           z DOUBLE PRECISION
         ) SERVER dpyr_testing
         OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'csv', HEADER 'TRUE', DELIMITER ',');
+        SELECT * FROM diamonds LIMIT 1; -- make sure we can read from the table
       EOF
 
 dependencies:
