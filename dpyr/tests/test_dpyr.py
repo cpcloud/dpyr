@@ -7,10 +7,10 @@ import pandas.util.testing as tm
 
 import ibis
 
-from ibis.expr.dplyr import (
+from dpyr import (
     anti_join,
     desc,
-    distinct,
+    # distinct,
     do,
     groupby,
     head,
@@ -21,7 +21,7 @@ from ibis.expr.dplyr import (
     min,
     mutate,
     n,
-    n_distinct,
+    # n_distinct,
     outer_join,
     right_join,
     select,
@@ -38,7 +38,7 @@ from ibis.expr.dplyr import (
 
 @pytest.fixture(scope='module')
 def df():
-    path = os.environ.get('IBIS_DIAMONDS_CSV', 'diamonds.csv')
+    path = os.environ.get('DIAMONDS_CSV', 'diamonds.csv')
     return pd.read_csv(path, index_col=None)
 
 
