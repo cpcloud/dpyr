@@ -4,22 +4,34 @@ machine:
   pre:
     # upgrade sqlite3 to # make sure we have the "instr" function available
     - sudo apt-get -qq install --only-upgrade sqlite3
-    # clang/boost for UDFs and graphviz for visualization
-    - sudo apt-get -qq install clang libboost-dev graphviz
+    - sudo apt-get -qq install graphviz
   environment:
     TEST_SQLITE_DB_PATH: $HOME/ibis-testing-data/ibis_testing.db
     TEST_POSTGRES_DB: circle_test
     DIAMONDS_CSV: $HOME/ibis-testing-data/diamonds.csv
     TEST_CRUNCHBASE_DB: $HOME/crunchbase.db
   post:
-    # download the crunchbase sqlite database, for lineage testing
     - wget https://storage.googleapis.com/ibis-ci-data/crunchbase.db
-
-    # download the data
-    - wget https://storage.googleapis.com/ibis-ci-data/ibis-testing-data.tar.gz
-
-    # untar it
-    - tar xvzf ibis-testing-data.tar.gz
+    - curl https://storage.googleapis.com/ibis-ci-data/ibis-testing-data.tar.gz | tar xz
+    - cp $DIAMONDS_CSV /tmp
+    - psql $TEST_POSTGRES_DB -c 'CREATE EXTENSION file_fdw'
+    - psql $TEST_POSTGRES_DB -c 'CREATE SERVER dpyr_testing FOREIGN DATA WRAPPER file_fdw'
+    - >
+      psql $TEST_POSTGRES_DB <<EOF
+      CREATE FOREIGN TABLE diamonds (
+        carat DOUBLE PRECISION,
+        cut TEXT,
+        color TEXT,
+        clarity TEXT,
+        depth DOUBLE PRECISION,
+        "table" DOUBLE PRECISION,
+        price INTEGER,
+        x DOUBLE PRECISION,
+        y DOUBLE PRECISION,
+        z DOUBLE PRECISION
+      ) SERVER dpyr_testing
+      OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'CSV', HEADER 'TRUE', DELIMITER ',');
+      EOF
 
 dependencies:
   override:
