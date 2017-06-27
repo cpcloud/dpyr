@@ -45,4 +45,5 @@ dependencies:
 
 test:
   override:
-    - tox -e py34,py35,py36
+    - case $CIRCLE_NODE_INDEX in 0) tox -e py34 ;; 1) tox -e py35 ;; 2) tox -e py36 ;; esac:
+        parallel: true
