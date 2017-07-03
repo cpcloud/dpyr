@@ -149,6 +149,17 @@ class Unary(Value):
         return self.operate(self.operand.resolve(expr, scope))
 
 
+class Not(Unary):
+
+    __slots__ = 'operand',
+
+    def __init__(self, operand: Value) -> None:
+        self.operand = operand
+
+    def operate(self, expr: ir.BooleanValue) -> ir.BooleanValue:
+        return ~expr
+
+
 class Add(Binary):
 
     __slots__ = ()
@@ -435,7 +446,7 @@ class SpreadReduction(Reduction):
         super().__init__(column, where=where)
         self.how = how
 
-    def __call__(self, expr: ir.Expr) -> Union[ir.ColumnExpr, ir.ScalarExpr]:
+    def __call__(self, expr: ir.Expr) -> ir.ValueExpr:
         where = self.where
         scope = {X: expr}
         column = self.column.resolve(expr, scope)
@@ -469,7 +480,7 @@ class mutate(Verb, Keyed):
 
     __slots__ = 'mutations',
 
-    def __init__(self, **mutations: ir.ColumnExpr) -> None:
+    def __init__(self, **mutations: ir.ValueExpr) -> None:
         self.mutations = mutations
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
@@ -483,7 +494,7 @@ class transmute(Verb, Keyed):
 
     __slots__ = 'mutations',
 
-    def __init__(self, **mutations: ir.ColumnExpr) -> None:
+    def __init__(self, **mutations: ir.ValueExpr) -> None:
         self.mutations = mutations
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
@@ -591,29 +602,27 @@ class anti_join(join):
 
 class distinct(Verb):
 
-    __slots__ = 'expressions',
+    __slots__ = 'expression',
 
-    def __init__(
-        self, **expressions: Union[ir.TableExpr, ir.ColumnExpr]
-    ) -> None:
-        self.expressions = expressions
+    def __init__(self, expression: Union[ir.TableExpr, ir.ColumnExpr]) -> None:
+        self.expression = expression
 
-    def __call__(self, expr: Union[ir.ColumnExpr, ir.TableExpr]):
-        return expr.projection([
-            e.distinct().name(name) for name, e in self.expressions.items()
-        ])
+    def __call__(
+        self, expr: Union[ir.TableExpr, ir.ColumnExpr]
+    ) -> Union[ir.TableExpr, ir.ColumnExpr]:
+        return self.expression.distinct()
 
 
 class cast(Verb):
 
-    __slots__ = 'column', 'to',
+    __slots__ = 'value', 'to',
 
-    def __init__(self, column: Value, to: Union[str, dt.DataType]) -> None:
-        self.column = column
+    def __init__(self, value: Value, to: Union[str, dt.DataType]) -> None:
+        self.value = value
         self.to = to
 
-    def __call__(self, expr: ir.TableExpr) -> ir.ColumnExpr:
-        return self.column.resolve(expr, {X: expr}).cast(self.to)
+    def __call__(self, table: ir.TableExpr) -> ir.ValueExpr:
+        return self.value.resolve(table, {X: table}).cast(self.to)
 
 
 Result = Union[pd.DataFrame, pd.Series, str, float, int]
@@ -639,4 +648,5 @@ class do:
 def from_dataframe(
     df: pd.DataFrame, name: str='t'
 ) -> ibis.pandas.PandasClient:
+    """Convert a pandas DataFrame into an ibis Table"""
     return ibis.pandas.connect({name: df}).table(name)
