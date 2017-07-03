@@ -604,13 +604,11 @@ class distinct(Verb):
 
     __slots__ = 'expression',
 
-    def __init__(self, expression: Union[ir.TableExpr, ir.ColumnExpr]) -> None:
+    def __init__(self, expression: Value) -> None:
         self.expression = expression
 
-    def __call__(
-        self, expr: Union[ir.TableExpr, ir.ColumnExpr]
-    ) -> Union[ir.TableExpr, ir.ColumnExpr]:
-        return self.expression.distinct()
+    def __call__(self, expr: ir.ColumnExpr) -> ir.ColumnExpr:
+        return self.expression.resolve(expr, {X: expr}).distinct()
 
 
 class cast(Verb):
