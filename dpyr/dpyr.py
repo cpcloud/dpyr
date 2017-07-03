@@ -3,6 +3,7 @@ import operator
 
 from typing import Union, Optional, Dict, Callable, List
 
+import numpy as np
 import pandas as pd
 
 import ibis
@@ -304,15 +305,14 @@ class desc(Value):
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         assert self.expr is not None
-        resolved = self.expr.resolve(expr, scope)
-        return ibis.desc(resolved)
+        return ibis.desc(self.expr.resolve(expr, scope))
 
 
 X = Value('X', None)
 Y = Value('Y', None)
 
 
-class Verb(metaclass=abc.ABCMeta):
+class Verb(Keyed, metaclass=abc.ABCMeta):
 
     __slots__ = ()
 
@@ -327,7 +327,7 @@ class Verb(metaclass=abc.ABCMeta):
         return self(other)
 
 
-class groupby(Verb, Keyed):
+class groupby(Verb):
 
     __slots__ = 'keys',
 
@@ -340,7 +340,7 @@ class groupby(Verb, Keyed):
         ])
 
 
-class select(Verb, Keyed):
+class select(Verb):
 
     __slots__ = 'columns',
 
@@ -358,7 +358,7 @@ class select(Verb, Keyed):
         ])
 
 
-class sift(Verb, Keyed):
+class sift(Verb):
 
     __slots__ = 'predicates',
 
@@ -373,7 +373,7 @@ class sift(Verb, Keyed):
         ])
 
 
-class summarize(Verb, Keyed):
+class summarize(Verb):
 
     __slots__ = 'metrics',
 
@@ -387,15 +387,17 @@ class summarize(Verb, Keyed):
         ])
 
 
-class head(Verb, Keyed):
+class head(Value):
 
     __slots__ = 'n',
 
     def __init__(self, n: Union[int, Value]=5) -> None:
         self.n = n
 
-    def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
-        return expr.head(self.n)
+    def resolve(self, expr: ir.TableExpr, scope: Scope) -> ir.TableExpr:
+        return expr.head(
+            self.n if isinstance(self.n, int) else self.n.resolve(expr, scope)
+        )
 
 
 class Reduction(Value):
@@ -407,10 +409,7 @@ class Reduction(Value):
         self.where = where
         self.func = operator.attrgetter(type(self).__name__.lower())
 
-    def __call__(self, expr: ir.Expr) -> ir.Expr:
-        return self.resolve(expr, {X: expr})
-
-    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.ValueExpr:
         where = self.where
         column = self.column.resolve(expr, scope)
         return self.func(column)(
@@ -446,7 +445,7 @@ class SpreadReduction(Reduction):
         super().__init__(column, where=where)
         self.how = how
 
-    def __call__(self, expr: ir.Expr) -> ir.ValueExpr:
+    def __call__(self, expr: ir.ColumnExpr) -> ir.ValueExpr:
         where = self.where
         scope = {X: expr}
         column = self.column.resolve(expr, scope)
@@ -476,7 +475,18 @@ class max(Reduction):
     __slots__ = ()
 
 
-class mutate(Verb, Keyed):
+class nunique(Reduction):
+
+    __slots__ = ()
+
+    def __init__(self, column: Value) -> None:
+        super().__init__(column, where=None)
+
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.ValueExpr:
+        return self.func(self.column.resolve(expr, scope))()
+
+
+class mutate(Verb):
 
     __slots__ = 'mutations',
 
@@ -490,7 +500,7 @@ class mutate(Verb, Keyed):
         })
 
 
-class transmute(Verb, Keyed):
+class transmute(Verb):
 
     __slots__ = 'mutations',
 
@@ -505,7 +515,7 @@ class transmute(Verb, Keyed):
         return expr.projection(columns)
 
 
-class sort_by(Verb, Keyed):
+class sort_by(Verb):
 
     __slots__ = 'sort_keys',
 
@@ -538,7 +548,7 @@ class On:
             return self.on
 
 
-class join(Verb, Keyed):
+class join(Verb):
 
     __slots__ = 'right', 'on', 'how',
 
@@ -600,29 +610,18 @@ class anti_join(join):
         super().__init__(right, on, how='anti')
 
 
-class distinct(Verb):
+class distinct(Value):
 
     __slots__ = 'expression',
 
     def __init__(self, expression: Value) -> None:
         self.expression = expression
 
-    def __call__(self, expr: ir.ColumnExpr) -> ir.ColumnExpr:
-        return self.expression.resolve(expr, {X: expr}).distinct()
+    def resolve(self, expr: ir.ColumnExpr, scope: Scope) -> ir.ColumnExpr:
+        return self.expression.resolve(expr, scope).distinct()
 
 
-class nunique(Verb):
-
-    __slots__ = 'expression',
-
-    def __init__(self, expression: Value) -> None:
-        self.expression = expression
-
-    def __call__(self, expr: ir.ColumnExpr) -> ir.ColumnExpr:
-        return self.expression.resolve(expr, {X: expr}).nunique()
-
-
-class cast(Verb):
+class cast(Value):
 
     __slots__ = 'value', 'to',
 
@@ -630,11 +629,13 @@ class cast(Verb):
         self.value = value
         self.to = to
 
-    def __call__(self, table: ir.TableExpr) -> ir.ValueExpr:
+    def resolve(self, table: ir.TableExpr, scope: Scope) -> ir.ValueExpr:
         return self.value.resolve(table, {X: table}).cast(self.to)
 
 
-Result = Union[pd.DataFrame, pd.Series, str, float, int]
+Result = Union[
+    pd.DataFrame, pd.Series, str, float, int, np.integer, np.floating
+]
 
 
 class do:

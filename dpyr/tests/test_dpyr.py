@@ -22,7 +22,7 @@ from dpyr import (
     min,
     mutate,
     n,
-    # n_distinct,
+    nunique,
     outer_join,
     right_join,
     select,
@@ -164,27 +164,62 @@ def test_mutate(diamonds):
     result = diamonds >> mutate(new_column=X.carat + 1)
     expected = diamonds.mutate(new_column=lambda x: x.carat + 1)
     assert result.equals(expected)
+    tm.assert_frame_equal(expected.execute(), result >> do())
 
 
 def test_transmute(diamonds):
     result = diamonds >> transmute(new_column=X.carat * 2)
     expected = diamonds[[(diamonds.carat * 2).name('new_column')]]
     assert result.equals(expected)
+    tm.assert_frame_equal(expected.execute(), result >> do())
 
 
 def test_cast(diamonds):
     result = diamonds >> cast(X.carat + 1, to='string')
     expected = (diamonds.carat + 1).cast('string')
     assert result.equals(expected)
+    tm.assert_series_equal(expected.execute(), result >> do())
 
 
-def test_distinct_table(diamonds):
-    result = diamonds >> distinct(X.carat)
-    expected = diamonds.carat.distinct()
+@pytest.mark.parametrize(
+    'column',
+    [
+        'carat',
+        'cut',
+        'color',
+        'clarity',
+        'depth',
+        'table',
+        'price',
+        'x',
+        'y',
+        'z',
+    ]
+)
+def test_distinct(diamonds, column):
+    result = diamonds >> distinct(X[column])
+    expected = diamonds[column].distinct()
     assert result.equals(expected)
+    tm.assert_series_equal(expected.execute(), result >> do())
 
 
-def test_distinct(diamonds):
-    result = diamonds >> n(distinct(X.carat))
-    expected = diamonds.carat.distinct().count()
+@pytest.mark.parametrize(
+    'column',
+    [
+        'carat',
+        'cut',
+        'color',
+        'clarity',
+        'depth',
+        'table',
+        'price',
+        'x',
+        'y',
+        'z',
+    ]
+)
+def test_nunique(diamonds, column):
+    result = diamonds >> nunique(X[column])
+    expected = diamonds[column].nunique()
     assert result.equals(expected)
+    assert expected.execute() == result >> do()
