@@ -9,8 +9,9 @@ import ibis
 
 from dpyr import (
     anti_join,
+    cast,
     desc,
-    # distinct,
+    distinct,
     do,
     groupby,
     head,
@@ -31,6 +32,7 @@ from dpyr import (
     std,
     sum,
     summarize,
+    transmute,
     var,
     X, Y,
 )
@@ -49,7 +51,8 @@ def df():
             '/home/phillip/data/ibis-testing-data/ibis_testing.db'
         ),
         ibis.pandas.connect({'diamonds': df(), 'other_diamonds': df()})
-    ]
+    ],
+    scope='module',
 )
 def client(request):
     return request.param
@@ -155,3 +158,33 @@ def test_simple_arithmetic(diamonds):
     expected = diamonds.carat.mean() + 1
     assert result.equals(expected)
     assert float(expected.execute()) == float(result >> do())
+
+
+def test_mutate(diamonds):
+    result = diamonds >> mutate(new_column=X.carat + 1)
+    expected = diamonds.mutate(new_column=lambda x: x.carat + 1)
+    assert result.equals(expected)
+
+
+def test_transmute(diamonds):
+    result = diamonds >> transmute(new_column=X.carat * 2)
+    expected = diamonds[[(diamonds.carat * 2).name('new_column')]]
+    assert result.equals(expected)
+
+
+def test_cast(diamonds):
+    result = diamonds >> cast(X.carat + 1, to='string')
+    expected = (diamonds.carat + 1).cast('string')
+    assert result.equals(expected)
+
+
+def test_distinct_table(diamonds):
+    result = diamonds >> distinct(X.carat)
+    expected = diamonds.carat.distinct()
+    assert result.equals(expected)
+
+
+def test_distinct(diamonds):
+    result = diamonds >> n(distinct(X.carat))
+    expected = diamonds.carat.distinct().count()
+    assert result.equals(expected)
