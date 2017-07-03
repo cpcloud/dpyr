@@ -14,7 +14,7 @@ with open('requirements.txt', 'rt') as f:
 all_requires = [
     'ibis-framework[impala, kerberos, pandas, postgres, sqlite, visualization]'
 ]
-develop_requires = all_requires + ['flake8', 'pytest >= 3']
+develop_requires = all_requires + ['flake8', 'pytest >= 3', 'mypy-lang']
 
 
 setup(
