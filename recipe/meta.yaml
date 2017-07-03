@@ -12,17 +12,17 @@ source:
 
 requirements:
   build:
-    - ibis-framework >=0.10
-    - numpy >=1.7.0
-    - pandas >=0.12.0
+    - ibis-framework >=0.11.2
+    - numpy
+    - pandas
     - python
     - setuptools
     - toolz
     - typing  # [py34]
   run:
-    - ibis-framework >=0.10
-    - numpy >=1.7.0
-    - pandas >=0.12.0
+    - ibis-framework >=0.11.2
+    - numpy
+    - pandas
     - python
     - setuptools
     - toolz
