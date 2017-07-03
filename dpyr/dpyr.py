@@ -611,6 +611,17 @@ class distinct(Verb):
         return self.expression.resolve(expr, {X: expr}).distinct()
 
 
+class nunique(Verb):
+
+    __slots__ = 'expression',
+
+    def __init__(self, expression: Value) -> None:
+        self.expression = expression
+
+    def __call__(self, expr: ir.ColumnExpr) -> ir.ColumnExpr:
+        return self.expression.resolve(expr, {X: expr}).nunique()
+
+
 class cast(Verb):
 
     __slots__ = 'value', 'to',
