@@ -4,7 +4,6 @@ import operator
 from typing import Union, Optional, Dict, List
 
 import numpy as np
-import pandas as pd
 
 import ibis.expr.types as ir
 
@@ -24,9 +23,8 @@ class Keyed:
         return Attribute(name, self)  # type: ignore
 
 
-Operand = Union[
-    'Value', str, int, float, np.str_, np.bytes_, np.integer, np.floating
-]
+Scalar = Union[str, int, float, np.str_, np.bytes_, np.integer, np.floating]
+Operand = Union['Value', Scalar]
 Scope = Dict[Operand, ir.Expr]
 
 
@@ -387,8 +385,3 @@ class On:
             return self.on.resolve(left, scope)
         else:
             return self.on
-
-
-Result = Union[
-    pd.DataFrame, pd.Series, str, float, int, np.integer, np.floating
-]

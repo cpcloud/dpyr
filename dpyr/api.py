@@ -11,7 +11,7 @@ import ibis.expr.datatypes as dt
 
 from ibis.expr.groupby import GroupedTableExpr
 
-from dpyr.core import Scope, Result
+from dpyr.core import Scope, Scalar
 from dpyr.core import Value, Getter, Verb, Reduction, SpreadReduction
 from dpyr.core import JoinKey, On
 from dpyr.core import X, Y
@@ -276,6 +276,9 @@ class cast(Value):
 
     def resolve(self, table: ir.TableExpr, scope: Scope) -> ir.ValueExpr:
         return self.value.resolve(table, {X: table}).cast(self.to)
+
+
+Result = Union[pd.DataFrame, pd.Series, Scalar]
 
 
 class do:
