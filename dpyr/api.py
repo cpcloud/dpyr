@@ -11,21 +11,24 @@ import ibis.expr.datatypes as dt
 
 from ibis.expr.groupby import GroupedTableExpr
 
-from dpyr.core import Scope, Scalar
-from dpyr.core import Value, Getter, Verb, Reduction, SpreadReduction
+from dpyr.core import Scope, Scalar, Operand
+from dpyr.core import (
+    Value,
+    UnnamedValue,
+    Getter,
+    Verb,
+    Reduction,
+    SpreadReduction,
+)
 from dpyr.core import JoinKey, On
 from dpyr.core import X, Y
 
 
-class desc(Value):
+class desc(UnnamedValue):
 
     __slots__ = ()
 
-    def __init__(self, expr: Value) -> None:
-        super().__init__('desc', expr=expr)
-
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        assert self.expr is not None
         return ibis.desc(self.expr.resolve(expr, scope))
 
 
@@ -52,7 +55,9 @@ class select(Verb):
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
         op = expr.op()
         if isinstance(op, ops.Join):
-            scope = {X: op.left, Y: op.right}
+            scope = {
+                X: op.left, Y: op.right
+            }
         else:
             scope = {X: expr}
         return expr.projection([
@@ -89,17 +94,12 @@ class summarize(Verb):
         ])
 
 
-class head(Value):
+class head(UnnamedValue):
 
-    __slots__ = 'n',
-
-    def __init__(self, n: Union[int, Value]=5) -> None:
-        self.n = n
+    __slots__ = ()
 
     def resolve(self, expr: ir.TableExpr, scope: Scope) -> ir.TableExpr:
-        return expr.head(
-            self.n if isinstance(self.n, int) else self.n.resolve(expr, scope)
-        )
+        return expr.head(self.expr.resolve(expr, scope))
 
 
 class mean(Reduction):
@@ -198,7 +198,7 @@ class join(Verb):
     __slots__ = 'right', 'on', 'how',
 
     def __init__(
-        self, right: ir.TableExpr, on: JoinKey, how: str='inner'
+        self, right: ir.TableExpr, on: JoinKey, *, how: str='inner'
     ) -> None:
         self.right = right
         self.on = On(right, on)
@@ -255,27 +255,24 @@ class anti_join(join):
         super().__init__(right, on, how='anti')
 
 
-class distinct(Value):
+class distinct(UnnamedValue):
 
-    __slots__ = 'expression',
-
-    def __init__(self, expression: Value) -> None:
-        self.expression = expression
+    __slots__ = ()
 
     def resolve(self, expr: ir.ColumnExpr, scope: Scope) -> ir.ColumnExpr:
-        return self.expression.resolve(expr, scope).distinct()
+        return self.expr.resolve(expr, scope).distinct()
 
 
-class cast(Value):
+class cast(UnnamedValue):
 
-    __slots__ = 'value', 'to',
+    __slots__ = 'to',
 
-    def __init__(self, value: Value, to: Union[str, dt.DataType]) -> None:
-        self.value = value
+    def __init__(self, value: Operand, to: Union[str, dt.DataType]) -> None:
+        super().__init__(value)
         self.to = to
 
     def resolve(self, table: ir.TableExpr, scope: Scope) -> ir.ValueExpr:
-        return self.value.resolve(table, {X: table}).cast(self.to)
+        return self.expr.resolve(table, {X: table}).cast(self.to)
 
 
 Result = Union[pd.DataFrame, pd.Series, Scalar]

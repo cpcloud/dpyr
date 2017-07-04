@@ -1,34 +1,45 @@
 import abc
 import operator
 
-from typing import Union, Optional, Dict, List
+from typing import Union, Optional, Dict, List, Tuple
+from typing import Any  # noqa: F401
 
 import numpy as np
 
+import ibis
 import ibis.expr.types as ir
 
 
 class Keyed:
-    """Objects that can be accessed by ``__getitem__`` or ``__getattr__``.
-    """
+    """Objects that can be accessed by ``__getitem__`` or ``__getattr__``."""
 
     __slots__ = ()
 
     def __getitem__(self, name: Union[str, int]) -> 'Item':
-        return Item(name, self)  # type: ignore
+        return Item(self, name)
 
     def __getattr__(self, name: str) -> 'Attribute':
         if name.startswith('_') and name.endswith('_'):
             raise AttributeError(name)
-        return Attribute(name, self)  # type: ignore
+        return Attribute(self, name)
 
 
-Scalar = Union[str, int, float, np.str_, np.bytes_, np.integer, np.floating]
-Operand = Union['Value', Scalar]
-Scope = Dict[Operand, ir.Expr]
+RawScalar = (
+    str, int, float, np.str_, np.bytes_, np.integer, np.floating, type(None)
+)
+Scalar = Optional[Union[
+    str, int, float, np.str_, np.bytes_, np.integer, np.floating
+]]
+Operand = Optional[Union[
+    'Value', str, int, float, np.str_, np.bytes_, np.integer, np.floating, None
+]]
+Scope = Dict['Value', ir.Expr]
 
 
 class Shiftable(metaclass=abc.ABCMeta):
+    """Objects whose ``__call__`` method is invoked by right shifting."""
+
+    __slots__ = ()
 
     @abc.abstractmethod
     def __call__(self, other: ir.Expr) -> ir.Expr:
@@ -39,32 +50,45 @@ class Shiftable(metaclass=abc.ABCMeta):
 
 
 class Resolvable(metaclass=abc.ABCMeta):
+    """Objects that resolve to an ibis expression."""
+
+    __slots__ = ()
 
     @abc.abstractmethod
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         pass
 
 
-class Value(Keyed, Resolvable, Shiftable):
-
+class Value(Keyed, Shiftable, Resolvable):
     """A generic value class forming the basis for dpyr expressions.
 
     Parameters
     ----------
-    name : str
-        The name of the expression
-    expr : Value
+    expr : Optional[Operand]
         The expression
+    name : Optional[str]
+        The name of the expression
     """
 
-    __slots__ = 'name', 'expr'
+    __slots__ = 'exprs', 'name'
 
-    def __init__(self, name: Optional[str], expr: Optional[Operand]) -> None:
-        self.name = name
-        self.expr = expr
+    def __init__(
+        self, exprs: Tuple[Optional[Operand], ...], name: Optional[str]=None
+    ) -> None:
+        self.exprs = tuple(
+            Literal(expr) if isinstance(expr, RawScalar) else expr
+            for expr in exprs
+        )  # type: Tuple[Value, ...]
+        self.name = name if name is not None else type(self).__name__
+
+    @property
+    def expr(self) -> 'Value':
+        assert len(self.exprs) == 1
+        return self.exprs[0]
 
     def __hash__(self) -> int:
-        return hash((self.name, self.expr))
+        exprs = self.exprs  # type: Tuple[Any, ...]
+        return hash(exprs + (self.name,))
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         return expr
@@ -121,49 +145,65 @@ class Value(Keyed, Resolvable, Shiftable):
         return Negate(self)
 
 
-class Binary(Value, metaclass=abc.ABCMeta):
+class UnnamedValue(Value):
 
+    __slots__ = ()
+
+    def __init__(self, *exprs: Optional[Operand]) -> None:
+        super().__init__(exprs)
+
+
+class Literal(UnnamedValue):
+
+    __slots__ = ()
+
+    def __init__(self, value: Optional[Scalar]) -> None:
+        self.exprs = (value,)
+        self.name = str(value)  # type: str
+
+    def resolve(self, expr: ir.ScalarExpr, scope: Scope) -> Scalar:
+        return self.expr
+
+
+class Binary(UnnamedValue, metaclass=abc.ABCMeta):
     """A class that implements :meth:`dpyr.Value.resolve` for binary
-    operations.
+    operations such as ``+``, ``*``, etc.
     """
 
-    __slots__ = 'left', 'right'
+    __slots__ = ()
 
-    def __init__(self, left: Operand, right: Operand) -> None:
-        self.left = left
-        self.right = right
+    @property
+    def left(self) -> Value:
+        assert len(self.exprs) == 2
+        return self.exprs[0]
+
+    @property
+    def right(self) -> Value:
+        assert len(self.exprs) == 2
+        return self.exprs[1]
 
     @abc.abstractmethod
     def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         pass
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        if isinstance(self.left, Resolvable):
-            left = self.left.resolve(expr, scope)
-        else:
-            left = self.left
-
-        if isinstance(self.right, Resolvable):
-            right = self.right.resolve(expr, scope)
-        else:
-            right = self.right
-
+        left = self.left.resolve(expr, scope)
+        right = self.right.resolve(expr, scope)
         return self.operate(left, right)
 
 
-class Unary(Value, metaclass=abc.ABCMeta):
+class Unary(UnnamedValue, metaclass=abc.ABCMeta):
+    """A class implementing :meth:`dpyr.Value.resolve` for unary operations
+    such as ``~`` and ``-``.
+    """
 
     __slots__ = ()
-
-    def __init__(self, operand: Operand) -> None:
-        super().__init__(None, operand)
 
     @abc.abstractmethod
     def operate(self, expr: ir.ValueExpr) -> ir.ValueExpr:
         pass
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        assert self.expr is not None
         return self.operate(self.expr.resolve(expr, scope))
 
 
@@ -288,12 +328,12 @@ class Ge(Binary):
 
 
 class Getter(Value):
+    """Parent class implementing resolution for :class:`dpyr.core.Attribute`
+    and :class:`dpyr.core.Item` objects."""
 
     __slots__ = ()
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        assert self.expr is not None
-
         try:
             result = scope[self.expr]
         except KeyError:
@@ -306,6 +346,9 @@ class Attribute(Getter):
 
     __slots__ = ()
 
+    def __init__(self, expr: Keyed, name: str) -> None:
+        super().__init__((expr,), name)
+
     def __repr__(self) -> str:
         return '{0.expr}.{0.name}'.format(self)
 
@@ -314,15 +357,21 @@ class Item(Getter):
 
     __slots__ = ()
 
+    def __init__(self, expr: Keyed, index: Union[str, int]) -> None:
+        super().__init__((expr,), str(index))
+
     def __repr__(self) -> str:
         return '{0.expr}[{0.name!r}]'.format(self)
 
 
-X = Value('X', None)
-Y = Value('Y', None)
+X = Value((), 'X')
+Y = Value((), 'Y')
 
 
 class Verb(Keyed, Shiftable, Resolvable):
+    """Operations whose ``resolve`` method is equal to their ``__call__``
+    method.
+    """
 
     __slots__ = ()
 
@@ -330,21 +379,22 @@ class Verb(Keyed, Shiftable, Resolvable):
         return self(other)
 
 
-class Reduction(Value):
+class Reduction(UnnamedValue):
 
-    __slots__ = 'column', 'where', 'func',
+    __slots__ = 'func',
 
     def __init__(self, column: Value, where: Optional[Value]=None) -> None:
-        self.column = column
-        self.where = where
+        super().__init__(column, where)
         self.func = operator.attrgetter(type(self).__name__.lower())
+
+    @property
+    def where(self) -> Resolvable:
+        return self.exprs[1]
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.ValueExpr:
         where = self.where
-        column = self.column.resolve(expr, scope)
-        return self.func(column)(
-            where=where.resolve(expr, scope) if where is not None else where
-        )
+        column = self.expr.resolve(expr, scope)
+        return self.func(column)(where=where.resolve(expr, scope))
 
 
 class SpreadReduction(Reduction):
@@ -359,29 +409,39 @@ class SpreadReduction(Reduction):
 
     def __call__(self, expr: ir.ColumnExpr) -> ir.ValueExpr:
         where = self.where
-        scope = {X: expr}
-        column = self.column.resolve(expr, scope)
+        scope = {X: expr}  # type: Scope
+        column = self.expr.resolve(expr, scope)
         return self.func(column)(
             where=where.resolve(expr, scope) if where is not None else where,
             how=self.how
         )
 
 
-JoinKey = Union[Value, List[Value], List[str]]
+JoinKey = Union[Value, List[Value], str, List[str]]
 
 
 class On:
+
+    """Class representing the condition of a join expression.
+
+    Parameters
+    ----------
+    right : ir.TableExpr
+        The right side relation to join against
+    on : JoinKey
+        The join condition
+    """
 
     __slots__ = 'right', 'on',
 
     def __init__(self, right: ir.TableExpr, on: JoinKey) -> None:
         self.right = right
-        self.on = on
+        self.on = [
+            Literal(expr) if isinstance(expr, str) else expr
+            for expr in ibis.util.promote_list(on)
+        ]
 
     def resolve(
         self, left: ir.TableExpr, scope: Scope
-    ) -> Union[ir.BooleanColumn, List[Union[ir.BooleanColumn, str]]]:
-        if isinstance(self.on, Value):
-            return self.on.resolve(left, scope)
-        else:
-            return self.on
+    ) -> List[Union[ir.BooleanColumn, str]]:
+        return [on.resolve(left, scope) for on in self.on]
