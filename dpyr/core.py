@@ -1,8 +1,9 @@
 import abc
 import operator
 
-from typing import Union, Optional, Dict, List, Tuple
+from typing import Union, Optional, Dict, List
 from typing import Any  # noqa: F401
+from typing import Tuple  # noqa: F401
 
 import numpy as np
 
@@ -72,18 +73,15 @@ class Value(Keyed, Shiftable, Resolvable):
 
     __slots__ = 'exprs', 'name'
 
-    def __init__(
-        self, exprs: Tuple[Optional[Operand], ...], name: Optional[str]=None
-    ) -> None:
+    def __init__(self, *exprs: Optional[Operand]) -> None:
         self.exprs = tuple(
             Literal(expr) if isinstance(expr, RawScalar) else expr
             for expr in exprs
         )  # type: Tuple[Value, ...]
-        self.name = name if name is not None else type(self).__name__
+        self.name = type(self).__name__
 
     @property
     def expr(self) -> 'Value':
-        assert len(self.exprs) == 1
         return self.exprs[0]
 
     def __hash__(self) -> int:
@@ -145,15 +143,7 @@ class Value(Keyed, Shiftable, Resolvable):
         return Negate(self)
 
 
-class UnnamedValue(Value):
-
-    __slots__ = ()
-
-    def __init__(self, *exprs: Optional[Operand]) -> None:
-        super().__init__(exprs)
-
-
-class Literal(UnnamedValue):
+class Literal(Value):
 
     __slots__ = ()
 
@@ -165,7 +155,7 @@ class Literal(UnnamedValue):
         return self.expr
 
 
-class Binary(UnnamedValue, metaclass=abc.ABCMeta):
+class Binary(Value, metaclass=abc.ABCMeta):
     """A class that implements :meth:`dpyr.Value.resolve` for binary
     operations such as ``+``, ``*``, etc.
     """
@@ -192,7 +182,7 @@ class Binary(UnnamedValue, metaclass=abc.ABCMeta):
         return self.operate(left, right)
 
 
-class Unary(UnnamedValue, metaclass=abc.ABCMeta):
+class Unary(Value, metaclass=abc.ABCMeta):
     """A class implementing :meth:`dpyr.Value.resolve` for unary operations
     such as ``~`` and ``-``.
     """
@@ -333,13 +323,17 @@ class Getter(Value):
 
     __slots__ = ()
 
+    @property
+    def index(self) -> Value:
+        return self.exprs[1]
+
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         try:
             result = scope[self.expr]
         except KeyError:
             result = expr
 
-        return result[self.name]
+        return result[self.index.resolve(expr, scope)]
 
 
 class Attribute(Getter):
@@ -347,10 +341,10 @@ class Attribute(Getter):
     __slots__ = ()
 
     def __init__(self, expr: Keyed, name: str) -> None:
-        super().__init__((expr,), name)
+        super().__init__(expr, name)
 
     def __repr__(self) -> str:
-        return '{0.expr}.{0.name}'.format(self)
+        return '{}.{}'.format(*self.exprs)
 
 
 class Item(Getter):
@@ -358,10 +352,10 @@ class Item(Getter):
     __slots__ = ()
 
     def __init__(self, expr: Keyed, index: Union[str, int]) -> None:
-        super().__init__((expr,), str(index))
+        super().__init__(expr, index)
 
     def __repr__(self) -> str:
-        return '{0.expr}[{0.name!r}]'.format(self)
+        return '{}[{!r}]'.format(*self.exprs)
 
 
 X = Value((), 'X')
@@ -379,7 +373,7 @@ class Verb(Keyed, Shiftable, Resolvable):
         return self(other)
 
 
-class Reduction(UnnamedValue):
+class Reduction(Value):
 
     __slots__ = 'func',
 

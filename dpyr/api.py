@@ -14,7 +14,6 @@ from ibis.expr.groupby import GroupedTableExpr
 from dpyr.core import Scope, Scalar, Operand
 from dpyr.core import (
     Value,
-    UnnamedValue,
     Getter,
     Verb,
     Reduction,
@@ -24,7 +23,7 @@ from dpyr.core import JoinKey, On
 from dpyr.core import X, Y
 
 
-class desc(UnnamedValue):
+class desc(Value):
 
     __slots__ = ()
 
@@ -94,7 +93,7 @@ class summarize(Verb):
         ])
 
 
-class head(UnnamedValue):
+class head(Value):
 
     __slots__ = ()
 
@@ -148,7 +147,7 @@ class nunique(Reduction):
         super().__init__(column)
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.ValueExpr:
-        return self.func(self.column.resolve(expr, scope))()
+        return self.func(self.expr.resolve(expr, scope))()
 
 
 class mutate(Verb):
@@ -255,7 +254,7 @@ class anti_join(join):
         super().__init__(right, on, how='anti')
 
 
-class distinct(UnnamedValue):
+class distinct(Value):
 
     __slots__ = ()
 
@@ -263,7 +262,7 @@ class distinct(UnnamedValue):
         return self.expr.resolve(expr, scope).distinct()
 
 
-class cast(UnnamedValue):
+class cast(Value):
 
     __slots__ = 'to',
 
