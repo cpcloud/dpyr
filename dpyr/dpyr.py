@@ -20,7 +20,7 @@ class Keyed:
 
     __slots__ = ()
 
-    def __getitem__(self, name: str) -> 'Item':
+    def __getitem__(self, name: Union[str, int]) -> 'Item':
         return Item(name, self)  # type: ignore
 
     def __getattr__(self, name: str) -> 'Attribute':
@@ -29,7 +29,10 @@ class Keyed:
         return Attribute(name, self)  # type: ignore
 
 
-Scope = Dict['Value', ir.Expr]
+Operand = Union[
+    'Value', str, int, float, np.str_, np.bytes_, np.integer, np.floating
+]
+Scope = Dict[Operand, ir.Expr]
 
 
 class Shiftable(metaclass=abc.ABCMeta):
@@ -56,12 +59,14 @@ class Value(Keyed, Resolvable, Shiftable):
     Parameters
     ----------
     name : str
+        The name of the expression
     expr : Value
+        The expression
     """
 
     __slots__ = 'name', 'expr'
 
-    def __init__(self, name: Optional[str], expr: Optional['Value']) -> None:
+    def __init__(self, name: Optional[str], expr: Optional[Operand]) -> None:
         self.name = name
         self.expr = expr
 
@@ -74,46 +79,46 @@ class Value(Keyed, Resolvable, Shiftable):
     def __call__(self, expr: ir.Expr) -> ir.Expr:
         return self.resolve(expr, {X: expr})
 
-    def __add__(self, other: 'Value') -> 'Add':
+    def __add__(self, other: Operand) -> 'Add':
         return Add(self, other)
 
-    def __sub__(self, other: 'Value') -> 'Sub':
+    def __sub__(self, other: Operand) -> 'Sub':
         return Sub(self, other)
 
-    def __mul__(self, other: 'Value') -> 'Mul':
+    def __mul__(self, other: Operand) -> 'Mul':
         return Mul(self, other)
 
-    def __truediv__(self, other: 'Value') -> 'Div':
+    def __truediv__(self, other: Operand) -> 'Div':
         return Div(self, other)
 
-    def __div__(self, other: 'Value') -> 'Div':
+    def __div__(self, other: Operand) -> 'Div':
         return Div(self, other)
 
-    def __floordiv__(self, other: 'Value') -> 'FloorDiv':
+    def __floordiv__(self, other: Operand) -> 'FloorDiv':
         return FloorDiv(self, other)
 
-    def __pow__(self, other: 'Value') -> 'Pow':
+    def __pow__(self, other: Operand) -> 'Pow':
         return Pow(self, other)
 
-    def __mod__(self, other: 'Value') -> 'Mod':
+    def __mod__(self, other: Operand) -> 'Mod':
         return Mod(self, other)
 
-    def __eq__(self, other: 'Value') -> 'Eq':  # type: ignore
+    def __eq__(self, other: Operand) -> 'Eq':  # type: ignore
         return Eq(self, other)
 
-    def __ne__(self, other: 'Value') -> 'Ne':  # type: ignore
+    def __ne__(self, other: Operand) -> 'Ne':  # type: ignore
         return Ne(self, other)
 
-    def __lt__(self, other: 'Value') -> 'Lt':
+    def __lt__(self, other: Operand) -> 'Lt':
         return Lt(self, other)
 
-    def __le__(self, other: 'Value') -> 'Le':
+    def __le__(self, other: Operand) -> 'Le':
         return Le(self, other)
 
-    def __gt__(self, other: 'Value') -> 'Gt':
+    def __gt__(self, other: Operand) -> 'Gt':
         return Gt(self, other)
 
-    def __ge__(self, other: 'Value') -> 'Ge':
+    def __ge__(self, other: Operand) -> 'Ge':
         return Ge(self, other)
 
     def __invert__(self) -> 'Not':
@@ -131,7 +136,7 @@ class Binary(Value, metaclass=abc.ABCMeta):
 
     __slots__ = 'left', 'right'
 
-    def __init__(self, left: Value, right: Value) -> None:
+    def __init__(self, left: Operand, right: Operand) -> None:
         self.left = left
         self.right = right
 
@@ -140,14 +145,14 @@ class Binary(Value, metaclass=abc.ABCMeta):
         pass
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        try:
+        if isinstance(self.left, Resolvable):
             left = self.left.resolve(expr, scope)
-        except AttributeError:
+        else:
             left = self.left
 
-        try:
+        if isinstance(self.right, Resolvable):
             right = self.right.resolve(expr, scope)
-        except AttributeError:
+        else:
             right = self.right
 
         return self.operate(left, right)
@@ -157,7 +162,7 @@ class Unary(Value, metaclass=abc.ABCMeta):
 
     __slots__ = ()
 
-    def __init__(self, operand: Value) -> None:
+    def __init__(self, operand: Operand) -> None:
         super().__init__(None, operand)
 
     @abc.abstractmethod
