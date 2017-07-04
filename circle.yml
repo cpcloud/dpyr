@@ -6,7 +6,7 @@ machine:
     - sudo apt-get -qq install --only-upgrade sqlite3
     - sudo apt-get -qq install graphviz
   environment:
-    TEST_SQLITE_DB_PATH: $HOME/ibis-testing-data/ibis_testing.db
+    TEST_SQLITE_DB: $HOME/ibis-testing-data/ibis_testing.db
     TEST_POSTGRES_DB: circle_test
     DIAMONDS_CSV: $HOME/ibis-testing-data/diamonds.csv
     TEST_CRUNCHBASE_DB: $HOME/crunchbase.db

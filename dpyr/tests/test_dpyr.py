@@ -46,9 +46,11 @@ def df():
 
 @pytest.fixture(
     params=[
-        ibis.postgres.connect(database='ibis_testing'),
+        ibis.postgres.connect(
+            database=os.environ.get('TEST_POSTGRES_DB', 'ibis_testing')
+        ),
         ibis.sqlite.connect(
-            '/home/phillip/data/ibis-testing-data/ibis_testing.db'
+            os.environ.get('TEST_SQLITE_DB', 'ibis_testing.db')
         ),
         ibis.pandas.connect({'diamonds': df(), 'other_diamonds': df()})
     ],
