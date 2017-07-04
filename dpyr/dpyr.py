@@ -36,7 +36,26 @@ class Keyed:
 Scope = Dict['Value', ir.Expr]
 
 
-class Value(Keyed):
+class Shiftable:
+
+    @abc.abstractmethod
+    def __call__(self, other: ir.Expr) -> ir.Expr:
+        pass
+
+    def __rrshift__(self, other: ir.Expr) -> ir.Expr:
+        return self(other)
+
+
+class Resolvable(Shiftable):
+
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
+        return expr
+
+    def __call__(self, other: ir.Expr) -> ir.Expr:
+        return self.resolve(other, {X: other})
+
+
+class Value(Keyed, Resolvable):
 
     """A generic value class forming the basis for dpyr expressions.
 
@@ -48,63 +67,60 @@ class Value(Keyed):
 
     __slots__ = 'name', 'expr'
 
-    def __init__(self, name: str, expr: Optional['Value']) -> None:
+    def __init__(self, name: Optional[str], expr: Optional['Value']) -> None:
         self.name = name
         self.expr = expr
 
     def __hash__(self) -> int:
         return hash((self.name, self.expr))
 
-    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return expr
-
-    def __call__(self, other: ir.Expr) -> ir.Expr:
-        return self.resolve(other, {X: other})
-
-    def __rrshift__(self, other: ir.Expr) -> ir.Expr:
-        return self(other)
-
-    def __add__(self, other) -> 'Add':
+    def __add__(self, other: 'Value') -> 'Add':
         return Add(self, other)
 
-    def __sub__(self, other):
+    def __sub__(self, other: 'Value') -> 'Sub':
         return Sub(self, other)
 
-    def __mul__(self, other):
+    def __mul__(self, other: 'Value') -> 'Mul':
         return Mul(self, other)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: 'Value') -> 'Div':
         return Div(self, other)
 
-    def __div__(self, other):
+    def __div__(self, other: 'Value') -> 'Div':
         return Div(self, other)
 
-    def __floordiv__(self, other):
+    def __floordiv__(self, other: 'Value') -> 'FloorDiv':
         return FloorDiv(self, other)
 
-    def __pow__(self, other):
+    def __pow__(self, other: 'Value') -> 'Pow':
         return Pow(self, other)
 
-    def __mod__(self, other):
+    def __mod__(self, other: 'Value') -> 'Mod':
         return Mod(self, other)
 
-    def __eq__(self, other):
+    def __eq__(self, other: 'Value') -> 'Eq':  # type: ignore
         return Eq(self, other)
 
-    def __ne__(self, other):
+    def __ne__(self, other: 'Value') -> 'Ne':  # type: ignore
         return Ne(self, other)
 
-    def __lt__(self, other):
+    def __lt__(self, other: 'Value') -> 'Lt':
         return Lt(self, other)
 
-    def __le__(self, other):
+    def __le__(self, other: 'Value') -> 'Le':
         return Le(self, other)
 
-    def __gt__(self, other):
+    def __gt__(self, other: 'Value') -> 'Gt':
         return Gt(self, other)
 
-    def __ge__(self, other):
+    def __ge__(self, other: 'Value') -> 'Ge':
         return Ge(self, other)
+
+    def __invert__(self) -> 'Not':
+        return Not(self)
+
+    def __neg__(self) -> 'Negate':
+        return Negate(self)
 
 
 class Binary(Value, metaclass=abc.ABCMeta):
@@ -120,7 +136,7 @@ class Binary(Value, metaclass=abc.ABCMeta):
         self.right = right
 
     @abc.abstractmethod
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         pass
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
@@ -128,37 +144,45 @@ class Binary(Value, metaclass=abc.ABCMeta):
             left = self.left.resolve(expr, scope)
         except AttributeError:
             left = self.left
+
         try:
             right = self.right.resolve(expr, scope)
         except AttributeError:
             right = self.right
+
         return self.operate(left, right)
 
 
-class Unary(Value):
+class Unary(Value, metaclass=abc.ABCMeta):
 
-    __slots__ = 'operand',
+    __slots__ = ()
 
     def __init__(self, operand: Value) -> None:
-        self.operand = operand
+        super().__init__(None, operand)
 
     @abc.abstractmethod
-    def operate(self, expr: ir.Expr) -> ir.Expr:
+    def operate(self, expr: ir.ValueExpr) -> ir.ValueExpr:
         pass
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return self.operate(self.operand.resolve(expr, scope))
+        assert self.expr is not None
+        return self.operate(self.expr.resolve(expr, scope))
 
 
 class Not(Unary):
 
-    __slots__ = 'operand',
-
-    def __init__(self, operand: Value) -> None:
-        self.operand = operand
+    __slots__ = ()
 
     def operate(self, expr: ir.BooleanValue) -> ir.BooleanValue:
         return ~expr
+
+
+class Negate(Unary):
+
+    __slots__ = ()
+
+    def operate(self, expr: ir.ValueExpr) -> ir.ValueExpr:
+        return -expr
 
 
 class Add(Binary):
@@ -312,16 +336,9 @@ X = Value('X', None)
 Y = Value('Y', None)
 
 
-class Verb(Keyed, metaclass=abc.ABCMeta):
+class Verb(Keyed, Shiftable, metaclass=abc.ABCMeta):
 
     __slots__ = ()
-
-    @abc.abstractmethod
-    def __call__(self, other: ir.Expr) -> ir.Expr:
-        raise NotImplementedError('{}.__call__'.format(type(self).__name__))
-
-    def __rrshift__(self, other: ir.Expr) -> ir.Expr:
-        return self(other)
 
     def resolve(self, other: ir.Expr, scope: Scope) -> ir.Expr:
         return self(other)
@@ -344,7 +361,7 @@ class select(Verb):
 
     __slots__ = 'columns',
 
-    def __init__(self, *columns: Union[Item, Attribute]) -> None:
+    def __init__(self, *columns: Getter) -> None:
         self.columns = columns
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
@@ -377,7 +394,7 @@ class summarize(Verb):
 
     __slots__ = 'metrics',
 
-    def __init__(self, **metrics: ir.Expr) -> None:
+    def __init__(self, **metrics: Value) -> None:
         self.metrics = sorted(metrics.items(), key=operator.itemgetter(0))
 
     def __call__(self, grouped: GroupedTableExpr) -> ir.Expr:
@@ -480,7 +497,7 @@ class nunique(Reduction):
     __slots__ = ()
 
     def __init__(self, column: Value) -> None:
-        super().__init__(column, where=None)
+        super().__init__(column)
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.ValueExpr:
         return self.func(self.column.resolve(expr, scope))()
@@ -490,7 +507,7 @@ class mutate(Verb):
 
     __slots__ = 'mutations',
 
-    def __init__(self, **mutations: ir.ValueExpr) -> None:
+    def __init__(self, **mutations: Value) -> None:
         self.mutations = mutations
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
@@ -504,7 +521,7 @@ class transmute(Verb):
 
     __slots__ = 'mutations',
 
-    def __init__(self, **mutations: ir.ValueExpr) -> None:
+    def __init__(self, **mutations: Value) -> None:
         self.mutations = mutations
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
