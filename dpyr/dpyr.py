@@ -16,10 +16,6 @@ from ibis.expr.groupby import GroupedTableExpr
 
 class Keyed:
     """Objects that can be accessed by ``__getitem__`` or ``__getattr__``.
-
-    Parameters
-    ----------
-    name : str
     """
 
     __slots__ = ()
@@ -36,7 +32,7 @@ class Keyed:
 Scope = Dict['Value', ir.Expr]
 
 
-class Shiftable:
+class Shiftable(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def __call__(self, other: ir.Expr) -> ir.Expr:
@@ -46,16 +42,14 @@ class Shiftable:
         return self(other)
 
 
-class Resolvable(Shiftable):
+class Resolvable(metaclass=abc.ABCMeta):
 
+    @abc.abstractmethod
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return expr
-
-    def __call__(self, other: ir.Expr) -> ir.Expr:
-        return self.resolve(other, {X: other})
+        pass
 
 
-class Value(Keyed, Resolvable):
+class Value(Keyed, Resolvable, Shiftable):
 
     """A generic value class forming the basis for dpyr expressions.
 
@@ -73,6 +67,12 @@ class Value(Keyed, Resolvable):
 
     def __hash__(self) -> int:
         return hash((self.name, self.expr))
+
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
+        return expr
+
+    def __call__(self, expr: ir.Expr) -> ir.Expr:
+        return self.resolve(expr, {X: expr})
 
     def __add__(self, other: 'Value') -> 'Add':
         return Add(self, other)
@@ -189,7 +189,7 @@ class Add(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left + right
 
 
@@ -197,7 +197,7 @@ class Sub(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left - right
 
 
@@ -205,7 +205,7 @@ class Mul(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left * right
 
 
@@ -213,7 +213,7 @@ class Div(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left / right
 
 
@@ -221,7 +221,7 @@ class FloorDiv(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left // right
 
 
@@ -229,7 +229,7 @@ class Pow(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left ** right
 
 
@@ -237,7 +237,7 @@ class Mod(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left % right
 
 
@@ -245,7 +245,7 @@ class Eq(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left == right
 
 
@@ -253,7 +253,7 @@ class Ne(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left != right
 
 
@@ -261,7 +261,7 @@ class Lt(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left < right
 
 
@@ -269,7 +269,7 @@ class Le(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left <= right
 
 
@@ -277,7 +277,7 @@ class Gt(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left > right
 
 
@@ -285,7 +285,7 @@ class Ge(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.Expr, right: ir.Expr) -> ir.Expr:
+    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
         return left >= right
 
 
@@ -336,7 +336,7 @@ X = Value('X', None)
 Y = Value('Y', None)
 
 
-class Verb(Keyed, Shiftable, metaclass=abc.ABCMeta):
+class Verb(Keyed, Shiftable, Resolvable):
 
     __slots__ = ()
 
