@@ -1,11 +1,16 @@
 import os
 
+from typing import Union
+
 import pytest
+import _pytest as pt
 
 import pandas as pd
 import pandas.util.testing as tm
 
 import ibis
+import ibis.expr.types as ir
+import ibis.expr.datatypes as dt
 
 from dpyr import (
     anti_join,
@@ -39,7 +44,7 @@ from dpyr import (
 
 
 @pytest.fixture(scope='module')
-def df():
+def df() -> pd.DataFrame:
     path = os.environ.get('DIAMONDS_CSV', 'diamonds.csv')
     return pd.read_csv(path, index_col=None)
 
@@ -56,21 +61,21 @@ def df():
     ],
     scope='module',
 )
-def client(request):
+def client(request: pt.fixtures.FixtureRequest) -> ibis.client.Client:
     return request.param
 
 
 @pytest.fixture
-def diamonds(client):
+def diamonds(client: ibis.client.Client) -> ir.TableExpr:
     return client.table('diamonds').head(1000)
 
 
 @pytest.fixture
-def other_diamonds(client):
+def other_diamonds(client: ibis.client.Client) -> ir.TableExpr:
     return client.table('diamonds').view().head(1000)
 
 
-def test_dplyr(diamonds):
+def test_compound_expression(diamonds: ir.TableExpr) -> None:
     expected = diamonds[diamonds.price * diamonds.price / 2.0 >= 100]
     expected = expected.groupby('cut').aggregate([
         expected.carat.max().name('max_carat'),
@@ -117,12 +122,17 @@ def test_dplyr(diamonds):
         anti_join,
     ]
 )
-def test_join(diamonds, other_diamonds, join_func):
+def test_join(
+    diamonds: ir.TableExpr,
+    other_diamonds: ir.TableExpr,
+    join_func: type
+) -> None:
     result = (
         diamonds >> join_func(other_diamonds, on=X.cut == Y.cut)
                  >> select(X.x, Y.y)
     )
-    joined = getattr(diamonds, join_func.__name__)(
+    join_func_name = join_func.__name__  # type: str
+    joined = getattr(diamonds, join_func_name)(
         other_diamonds, diamonds.cut == other_diamonds.cut
     )
     expected = joined[diamonds.x, other_diamonds.y]
@@ -142,43 +152,47 @@ def test_join(diamonds, other_diamonds, join_func):
         'x',
         'y',
         'z',
-    ] + list(range(10))  # type: List[Union[str, int]]
+        0,
+    ] + list(range(1, 10))
 )
-def test_pull(diamonds, column):
+def test_pull(diamonds: ir.TableExpr, column: Union[str, int]) -> None:
     result = diamonds >> X[column]
     expected = diamonds[column]
     assert result.equals(expected)
     tm.assert_series_equal(expected.execute(), result >> do())
 
 
-def test_do(diamonds):
+def test_do(diamonds: ir.TableExpr) -> None:
     tm.assert_frame_equal(diamonds.execute(), diamonds >> do())
 
 
-def test_simple_arithmetic(diamonds):
+def test_simple_arithmetic(diamonds: ir.TableExpr) -> None:
     result = diamonds >> mean(X.carat) + 1
     expected = diamonds.carat.mean() + 1
     assert result.equals(expected)
     assert float(expected.execute()) == float(result >> do())
 
 
-def test_mutate(diamonds):
+def test_mutate(diamonds: ir.TableExpr) -> None:
     result = diamonds >> mutate(new_column=X.carat + 1)
     expected = diamonds.mutate(new_column=lambda x: x.carat + 1)
     assert result.equals(expected)
     tm.assert_frame_equal(expected.execute(), result >> do())
 
 
-def test_transmute(diamonds):
+def test_transmute(diamonds: ir.TableExpr) -> None:
     result = diamonds >> transmute(new_column=X.carat * 2)
     expected = diamonds[[(diamonds.carat * 2).name('new_column')]]
     assert result.equals(expected)
     tm.assert_frame_equal(expected.execute(), result >> do())
 
 
-def test_cast(diamonds):
-    result = diamonds >> cast(X.carat + 1, to='string')
-    expected = (diamonds.carat + 1).cast('string')
+@pytest.mark.parametrize('to', ['string', dt.string])
+def test_cast(
+    diamonds: ir.TableExpr, to: Union[str, dt.DataType]
+) -> None:
+    result = diamonds >> cast(X.carat + 1, to=to)
+    expected = (diamonds.carat + 1).cast(to)
     assert result.equals(expected)
     tm.assert_series_equal(expected.execute(), result >> do())
 
@@ -198,7 +212,7 @@ def test_cast(diamonds):
         'z',
     ]
 )
-def test_distinct(diamonds, column):
+def test_distinct(diamonds: ir.TableExpr, column: str) -> None:
     result = diamonds >> distinct(X[column])
     expected = diamonds[column].distinct()
     assert result.equals(expected)
@@ -220,7 +234,7 @@ def test_distinct(diamonds, column):
         'z',
     ]
 )
-def test_nunique(diamonds, column):
+def test_nunique(diamonds: ir.TableExpr, column: str) -> None:
     result = diamonds >> nunique(X[column])
     expected = diamonds[column].nunique()
     assert result.equals(expected)
