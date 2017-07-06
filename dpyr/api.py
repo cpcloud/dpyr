@@ -18,17 +18,127 @@ from dpyr.core import (
     Verb,
     Reduction,
     SpreadReduction,
+    Unary,
+    Binary,
 )
 from dpyr.core import JoinKey, On
 from dpyr.core import X, Y
 
 
-class desc(Value):
+class desc(Unary):
 
     __slots__ = ()
 
-    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
-        return ibis.desc(self.expr.resolve(expr, scope))
+    def operate(self, expr: ir.ColumnExpr) -> ir.SortExpr:
+        return ibis.desc(expr)
+
+
+class log(Binary):
+
+    __slots__ = ()
+
+    def operate(
+        self, arg: ir.NumericValue, base: ir.NumericValue
+    ) -> ir.NumericValue:
+        return arg.log(base)
+
+
+class ln(Unary):
+
+    __slots__ = ()
+
+    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
+        return arg.ln()
+
+
+class floor(Unary):
+
+    __slots__ = ()
+
+    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
+        return arg.floor()
+
+
+class ceil(Unary):
+
+    __slots__ = ()
+
+    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
+        return arg.ceil()
+
+
+class exp(Unary):
+
+    __slots__ = ()
+
+    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
+        return arg.exp()
+
+
+class abs(Unary):
+
+    __slots__ = ()
+
+    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
+        return arg.abs()
+
+
+class round(Binary):
+
+    __slots__ = ()
+
+    def operate(
+        self, arg: ir.NumericValue, places: ir.IntegerValue
+    ) -> ir.NumericValue:
+        return arg.round(places)
+
+
+class sign(Unary):
+
+    __slots__ = ()
+
+    def operate(self, arg: ir.NumericValue) -> ir.IntegerValue:
+        return arg.sign()
+
+
+class log2(Unary):
+
+    __slots__ = ()
+
+    def operate(self, expr: ir.NumericValue) -> ir.NumericValue:
+        return expr.log2()
+
+
+class log10(Unary):
+
+    __slots__ = ()
+
+    def operate(self, expr: ir.NumericValue) -> ir.NumericValue:
+        return expr.log10()
+
+
+class sqrt(Unary):
+
+    __slots__ = ()
+
+    def operate(self, expr: ir.NumericValue) -> ir.NumericValue:
+        return expr.sqrt()
+
+
+class lower(Unary):
+
+    __slots__ = ()
+
+    def operate(self, expr: ir.StringValue) -> ir.StringValue:
+        return expr.lower()
+
+
+class upper(Unary):
+
+    __slots__ = ()
+
+    def operate(self, expr: ir.StringValue) -> ir.StringValue:
+        return expr.upper()
 
 
 class groupby(Verb):
@@ -254,12 +364,12 @@ class anti_join(join):
         super().__init__(right, on, how='anti')
 
 
-class distinct(Value):
+class distinct(Unary):
 
     __slots__ = ()
 
-    def resolve(self, expr: ir.ColumnExpr, scope: Scope) -> ir.ColumnExpr:
-        return self.expr.resolve(expr, scope).distinct()
+    def operate(self, expr: ir.ColumnExpr) -> ir.ColumnExpr:
+        return expr.distinct()
 
 
 class cast(Value):
