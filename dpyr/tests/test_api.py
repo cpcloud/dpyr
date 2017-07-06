@@ -1,4 +1,5 @@
 import os
+import operator
 
 from typing import Union, Type
 
@@ -23,6 +24,7 @@ from dpyr import (
     inner_join,
     join,
     left_join,
+    log,
     max,
     mean,
     min,
@@ -279,8 +281,49 @@ def test_unary_math(diamonds: ir.TableExpr, func: Type[Unary]) -> None:
     tm.assert_series_equal(result >> do(), expected.execute())
 
 
+@pytest.mark.parametrize(
+    'func',
+    [
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.truediv,
+        operator.floordiv,
+        operator.pow,
+        operator.mod,
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ]
+)
+def test_binary_math(diamonds: ir.TableExpr, func: Type[Binary]) -> None:
+    result = diamonds >> func(X.carat, X.z)
+    expected = func(diamonds.carat, diamonds.z)
+    assert result.equals(expected)
+    tm.assert_series_equal(result >> do(), expected.execute())
+
+
+@pytest.mark.parametrize('base', list(range(-5, 6)))
+def test_log(base: int) -> None:
+    result = diamonds >> log(X.carat, base)
+    expected = diamonds.carat.log(base)
+    assert result.equals(expected)
+    tm.assert_series_equal(result >> do(), expected.execute())
+
+
+@pytest.mark.parametrize('places', list(range(-5, 6)))
+def test_round(diamonds: ir.TableExpr, places: int) -> None:
+    result = diamonds >> round(X.carat, places)
+    expected = diamonds.carat.round(places)
+    assert result.equals(expected)
+    tm.assert_series_equal(result >> do(), expected.execute())
+
+
 @pytest.mark.parametrize('func', [lower, upper])
-def test_unary_string(diamonds, func: Type[Unary]) -> None:
+def test_unary_string(diamonds: ir.TableExpr, func: Type[Unary]) -> None:
     result = diamonds >> func(X.cut)
     expected = getattr(diamonds.cut, func.__name__)()
     assert result.equals(expected)
