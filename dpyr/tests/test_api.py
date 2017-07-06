@@ -1,6 +1,6 @@
 import os
 
-from typing import Union
+from typing import Union, Type
 
 import pytest
 import _pytest as pt
@@ -21,6 +21,7 @@ from dpyr import (
     groupby,
     head,
     inner_join,
+    join,
     left_join,
     max,
     mean,
@@ -40,7 +41,23 @@ from dpyr import (
     transmute,
     var,
     X, Y,
+
+    exp,
+    ln,
+    log2,
+    log10,
+    floor,
+    ceil,
+    abs,
+    round,
+    sign,
+    sqrt,
+
+    lower,
+    upper,
 )
+
+from dpyr.core import Unary, Binary
 
 
 @pytest.fixture(scope='module')
@@ -125,7 +142,7 @@ def test_compound_expression(diamonds: ir.TableExpr) -> None:
 def test_join(
     diamonds: ir.TableExpr,
     other_diamonds: ir.TableExpr,
-    join_func: type
+    join_func: Type[join]
 ) -> None:
     result = (
         diamonds >> join_func(other_diamonds, on=X.cut == Y.cut)
@@ -239,3 +256,32 @@ def test_nunique(diamonds: ir.TableExpr, column: str) -> None:
     expected = diamonds[column].nunique()
     assert result.equals(expected)
     assert expected.execute() == result >> do()
+
+
+@pytest.mark.parametrize(
+    'func',
+    [
+        exp,
+        ln,
+        log2,
+        log10,
+        floor,
+        ceil,
+        abs,
+        sign,
+        sqrt,
+    ]
+)
+def test_unary_math(diamonds: ir.TableExpr, func: Type[Unary]) -> None:
+    result = diamonds >> func(cast(X.carat, to=dt.Decimal(19, 7)))
+    expected = getattr(diamonds.carat.cast(dt.Decimal(19, 7)), func.__name__)()
+    assert result.equals(expected)
+    tm.assert_series_equal(result >> do(), expected.execute())
+
+
+@pytest.mark.parametrize('func', [lower, upper])
+def test_unary_string(diamonds, func: Type[Unary]) -> None:
+    result = diamonds >> func(X.cut)
+    expected = getattr(diamonds.cut, func.__name__)()
+    assert result.equals(expected)
+    tm.assert_series_equal(result >> do(), expected.execute())
