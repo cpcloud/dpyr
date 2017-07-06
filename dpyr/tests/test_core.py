@@ -2,20 +2,27 @@ from typing import Union
 
 import pytest
 
-from dpyr.core import X, Y, Literal
+from dpyr.core import Value, X, Y, Literal
 
 
-def test_X_Y() -> None:
-    assert repr(X) == 'X'
-    assert repr(Y) == 'Y'
+@pytest.mark.parametrize(
+    ('variable', 'expected'),
+    [
+        (X, 'X'),
+        (Y, 'Y'),
+    ]
+)
+def test_X_Y(variable: Value, expected: str) -> None:
+    assert repr(variable) == expected
 
 
 def test_attribute_repr() -> None:
     assert repr(X.foo) == 'X.foo'
 
 
-def test_item_repr() -> None:
-    assert repr(X.foo['a']) == "X.foo['a']"
+@pytest.mark.parametrize('value', [1, 'a', 'bar baz'])
+def test_item_repr(value: Union[int, str]) -> None:
+    assert repr(X.foo[value]) == "X.foo[{!r}]".format(value)
 
 
 @pytest.mark.parametrize('value', [1, 'a', 3.42])
