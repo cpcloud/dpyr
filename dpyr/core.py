@@ -84,6 +84,13 @@ class Value(Keyed, Shiftable, Resolvable):
     def expr(self) -> 'Value':
         return self.exprs[0]
 
+    def __repr__(self) -> str:
+        arguments = [expr for expr in self.exprs if expr is not None]
+
+        if not arguments:
+            return self.name
+        return '{}({})'.format(self.name, ', '.join(map(repr, arguments)))
+
     def __hash__(self) -> int:
         exprs = self.exprs  # type: Tuple[Any, ...]
         return hash(exprs + (self.name,))
@@ -145,11 +152,14 @@ class Value(Keyed, Shiftable, Resolvable):
 
 class Literal(Value):
 
-    __slots__ = ()
+    __slots__ = 'exprs', 'name'
 
     def __init__(self, value: Optional[Scalar]) -> None:
         self.exprs = (value,)
         self.name = str(value)  # type: str
+
+    def __repr__(self) -> str:
+        return repr(self.exprs[0])
 
     def resolve(self, expr: ir.ScalarExpr, scope: Scope) -> Scalar:
         return self.expr
@@ -344,7 +354,7 @@ class Attribute(Getter):
         super().__init__(expr, name)
 
     def __repr__(self) -> str:
-        return '{}.{}'.format(*self.exprs)
+        return '{}.{}'.format(self.exprs[0], self.exprs[1].exprs[0])
 
 
 class Item(Getter):
@@ -355,11 +365,13 @@ class Item(Getter):
         super().__init__(expr, index)
 
     def __repr__(self) -> str:
-        return '{}[{!r}]'.format(*self.exprs)
+        return '{}[{!r}]'.format(self.exprs[0], self.exprs[1].exprs[0])
 
 
-X = Value((), 'X')
-Y = Value((), 'Y')
+X = Value()
+X.name = 'X'
+Y = Value()
+Y.name = 'Y'
 
 
 class Verb(Keyed, Shiftable, Resolvable):
