@@ -165,7 +165,7 @@ class Literal(Value):
         return self.expr
 
 
-class Binary(Value, metaclass=abc.ABCMeta):
+class Binary(Value):
     """A class that implements :meth:`dpyr.Value.resolve` for binary
     operations such as ``+``, ``*``, etc.
     """
@@ -182,9 +182,9 @@ class Binary(Value, metaclass=abc.ABCMeta):
         assert len(self.exprs) == 2
         return self.exprs[1]
 
-    @abc.abstractmethod
     def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        pass
+        function = getattr(operator, type(self).__name__.lower())
+        return function(left, right)
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         left = self.left.resolve(expr, scope)
@@ -192,16 +192,16 @@ class Binary(Value, metaclass=abc.ABCMeta):
         return self.operate(left, right)
 
 
-class Unary(Value, metaclass=abc.ABCMeta):
+class Unary(Value):
     """A class implementing :meth:`dpyr.Value.resolve` for unary operations
     such as ``~`` and ``-``.
     """
 
     __slots__ = ()
 
-    @abc.abstractmethod
     def operate(self, expr: ir.ValueExpr) -> ir.ValueExpr:
-        pass
+        method = getattr(expr, type(self).__name__)
+        return method()
 
     def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
         return self.operate(self.expr.resolve(expr, scope))
@@ -227,24 +227,15 @@ class Add(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left + right
-
 
 class Sub(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left - right
-
 
 class Mul(Binary):
 
     __slots__ = ()
-
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left * right
 
 
 class Div(Binary):
@@ -259,72 +250,45 @@ class FloorDiv(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left // right
-
 
 class Pow(Binary):
 
     __slots__ = ()
-
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left ** right
 
 
 class Mod(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left % right
-
 
 class Eq(Binary):
 
     __slots__ = ()
-
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left == right
 
 
 class Ne(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left != right
-
 
 class Lt(Binary):
 
     __slots__ = ()
-
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left < right
 
 
 class Le(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left <= right
-
 
 class Gt(Binary):
 
     __slots__ = ()
 
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left > right
-
 
 class Ge(Binary):
 
     __slots__ = ()
-
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left >= right
 
 
 class Getter(Value):

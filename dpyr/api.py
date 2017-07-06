@@ -47,40 +47,25 @@ class ln(Unary):
 
     __slots__ = ()
 
-    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
-        return arg.ln()
-
 
 class floor(Unary):
 
     __slots__ = ()
-
-    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
-        return arg.floor()
 
 
 class ceil(Unary):
 
     __slots__ = ()
 
-    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
-        return arg.ceil()
-
 
 class exp(Unary):
 
     __slots__ = ()
 
-    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
-        return arg.exp()
-
 
 class abs(Unary):
 
     __slots__ = ()
-
-    def operate(self, arg: ir.NumericValue) -> ir.NumericValue:
-        return arg.abs()
 
 
 class round(Binary):
@@ -97,48 +82,30 @@ class sign(Unary):
 
     __slots__ = ()
 
-    def operate(self, arg: ir.NumericValue) -> ir.IntegerValue:
-        return arg.sign()
-
 
 class log2(Unary):
 
     __slots__ = ()
-
-    def operate(self, expr: ir.NumericValue) -> ir.NumericValue:
-        return expr.log2()
 
 
 class log10(Unary):
 
     __slots__ = ()
 
-    def operate(self, expr: ir.NumericValue) -> ir.NumericValue:
-        return expr.log10()
-
 
 class sqrt(Unary):
 
     __slots__ = ()
-
-    def operate(self, expr: ir.NumericValue) -> ir.NumericValue:
-        return expr.sqrt()
 
 
 class lower(Unary):
 
     __slots__ = ()
 
-    def operate(self, expr: ir.StringValue) -> ir.StringValue:
-        return expr.lower()
-
 
 class upper(Unary):
 
     __slots__ = ()
-
-    def operate(self, expr: ir.StringValue) -> ir.StringValue:
-        return expr.upper()
 
 
 class groupby(Verb):
