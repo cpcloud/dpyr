@@ -5,19 +5,17 @@ machine:
     # upgrade sqlite3 to # make sure we have the "instr" function available
     - sudo apt-get -qq install --only-upgrade sqlite3
     - sudo apt-get -qq install graphviz
-    - shopt -s globstar extglob
   environment:
     TEST_SQLITE_DB: $HOME/ibis-testing-data/ibis_testing.db
     TEST_POSTGRES_DB: circle_test
     DIAMONDS_CSV: $HOME/ibis-testing-data/diamonds.csv
     TEST_CRUNCHBASE_DB: $HOME/crunchbase.db
   post:
-    - echo "${BASHOPTS}"
     - wget https://storage.googleapis.com/ibis-ci-data/crunchbase.db
     - curl https://storage.googleapis.com/ibis-ci-data/ibis-testing-data.tar.gz | tar xz
     - cp $DIAMONDS_CSV /tmp
     - psql $TEST_POSTGRES_DB -c 'CREATE EXTENSION file_fdw'
-    - psql $TEST_POSTGRES_DB -c 'CREATE SERVER dpyr_testing FOREIGN DATA WRAPPER file_fdw'
+    - psql $TEST_POSTGRES_DB -c 'CREATE SERVER dpyr_file_fdw FOREIGN DATA WRAPPER file_fdw'
     - >
       psql $TEST_POSTGRES_DB <<EOF
         CREATE FOREIGN TABLE diamonds (
@@ -31,10 +29,17 @@ machine:
           x DOUBLE PRECISION,
           y DOUBLE PRECISION,
           z DOUBLE PRECISION
-        ) SERVER dpyr_testing
-        OPTIONS (FILENAME '/tmp/diamonds.csv', FORMAT 'csv', HEADER 'TRUE', DELIMITER ',');
-        SELECT * FROM diamonds LIMIT 1; -- make sure we can read from the table
+        ) SERVER dpyr_file_fdw
+        OPTIONS (
+          FILENAME '/tmp/diamonds.csv',
+          FORMAT 'csv',
+          HEADER 'TRUE',
+          DELIMITER ','
+        );
       EOF
+
+    # make sure we can read from the table
+    - psql $TEST_POSTGRES_DB -c 'SELECT * FROM diamonds LIMIT 1'
 
 dependencies:
   override:
@@ -48,5 +53,5 @@ dependencies:
 
 test:
   override:
-    - case $CIRCLE_NODE_INDEX in 0) tox -e py34 ;; 1) tox -e py35 ;; 2) tox -e py36 ;; esac:
+    - case $CIRCLE_NODE_INDEX in 0) BASHOPTS=globstar tox -e py34 ;; 1) BASHOPTS=globstar tox -e py35 ;; 2) BASHOPTS=globstar tox -e py36 ;; esac:
         parallel: true
