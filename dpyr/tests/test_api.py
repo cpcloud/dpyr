@@ -1,7 +1,7 @@
 import os
 import operator
 
-from typing import Union, Type
+from typing import Union, Type, Callable
 
 import pytest
 import _pytest as pt
@@ -59,7 +59,7 @@ from dpyr import (
     upper,
 )
 
-from dpyr.core import Unary, Binary
+from dpyr.core import Unary
 
 
 @pytest.fixture(scope='module')
@@ -299,7 +299,7 @@ def test_unary_math(diamonds: ir.TableExpr, func: Type[Unary]) -> None:
         operator.ge,
     ]
 )
-def test_binary_math(diamonds: ir.TableExpr, func: Type[Binary]) -> None:
+def test_binary_math(diamonds: ir.TableExpr, func: Callable) -> None:
     result = diamonds >> func(X.carat, X.z)
     expected = func(diamonds.carat, diamonds.z)
     assert result.equals(expected)
