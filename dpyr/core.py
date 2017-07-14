@@ -110,11 +110,11 @@ class Value(Keyed, Shiftable, Resolvable):
     def __mul__(self, other: Operand) -> 'Mul':
         return Mul(self, other)
 
-    def __truediv__(self, other: Operand) -> 'Div':
-        return Div(self, other)
+    def __truediv__(self, other: Operand) -> 'TrueDiv':
+        return TrueDiv(self, other)
 
-    def __div__(self, other: Operand) -> 'Div':
-        return Div(self, other)
+    def __div__(self, other: Operand) -> 'TrueDiv':
+        return TrueDiv(self, other)
 
     def __floordiv__(self, other: Operand) -> 'FloorDiv':
         return FloorDiv(self, other)
@@ -238,12 +238,9 @@ class Mul(Binary):
     __slots__ = ()
 
 
-class Div(Binary):
+class TrueDiv(Binary):
 
     __slots__ = ()
-
-    def operate(self, left: ir.ValueExpr, right: ir.ValueExpr) -> ir.ValueExpr:
-        return left / right
 
 
 class FloorDiv(Binary):
