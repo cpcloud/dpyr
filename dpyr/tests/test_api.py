@@ -30,6 +30,7 @@ from dpyr import (
     min,
     mutate,
     n,
+    nullif,
     nunique,
     outer_join,
     right_join,
@@ -68,15 +69,23 @@ def df() -> pd.DataFrame:
     return pd.read_csv(path, index_col=None)
 
 
+@pytest.fixture(scope='module')
+def batting_df() -> pd.DataFrame:
+    path = os.environ.get('BATTING_CSV', 'batting.csv')
+    return pd.read_csv(path, index_col=None)
+
+
 @pytest.fixture(
     params=[
-        ibis.postgres.connect(
-            database=os.environ.get('TEST_POSTGRES_DB', 'ibis_testing')
-        ),
+        # ibis.postgres.connect(
+            # database=os.environ.get('TEST_POSTGRES_DB', 'ibis_testing')
+        # ),
         ibis.sqlite.connect(
             os.environ.get('TEST_SQLITE_DB', 'ibis_testing.db')
         ),
-        ibis.pandas.connect({'diamonds': df(), 'other_diamonds': df()})
+        # ibis.pandas.connect({
+            # 'diamonds': df(), 'other_diamonds': df(), 'batting': batting_df()
+        # })
     ],
     scope='module',
 )
@@ -87,6 +96,16 @@ def client(request: pt.fixtures.FixtureRequest) -> ibis.client.Client:
 @pytest.fixture
 def diamonds(client: ibis.client.Client) -> ir.TableExpr:
     return client.table('diamonds').head(1000)
+
+
+@pytest.fixture
+def batting(client: ibis.client.Client) -> ir.TableExpr:
+    return client.table('batting')
+
+
+@pytest.fixture
+def awards_players(client: ibis.client.Client) -> ir.TableExpr:
+    return client.table('awards_players')
 
 
 @pytest.fixture
@@ -306,12 +325,17 @@ def test_binary_math(diamonds: ir.TableExpr, func: Callable) -> None:
     tm.assert_series_equal(result >> do(), expected.execute())
 
 
-@pytest.mark.parametrize('base', list(range(-5, 6)))
-def test_log(base: int) -> None:
-    result = diamonds >> log(X.carat, base)
-    expected = diamonds.carat.log(base)
-    assert result.equals(expected)
-    tm.assert_series_equal(result >> do(), expected.execute())
+@pytest.mark.parametrize(
+    'base',
+    [-2, -1, 1, 2],
+)
+def test_log(diamonds: ir.TableExpr, base: int) -> None:
+    result_expr = diamonds >> log(nullif(X.carat, 0), base)
+    expected_expr = diamonds.carat.nullif(0).log(base)
+    assert result_expr.equals(expected_expr)
+    result_df = result_expr >> do()
+    expected_df = expected_expr.execute()
+    tm.assert_series_equal(result_df, expected_df)
 
 
 @pytest.mark.parametrize('places', list(range(-5, 6)))
@@ -328,3 +352,17 @@ def test_unary_string(diamonds: ir.TableExpr, func: Type[Unary]) -> None:
     expected = getattr(diamonds.cut, func.__name__)()
     assert result.equals(expected)
     tm.assert_series_equal(result >> do(), expected.execute())
+
+
+def test_column_slice(batting: ir.TableExpr) -> None:
+    result = batting >> select(
+        X.playerID, X.yearID, X.teamID, X.G, X['AB':'H']
+    )
+    columns = batting.columns
+    expected = batting[
+        ['playerID', 'yearID', 'teamID', 'G'] + [
+            columns[i]
+            for i in range(columns.index('AB'), columns.index('H') + 1)
+        ]
+    ]
+    assert result.equals(expected)

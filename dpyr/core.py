@@ -16,7 +16,9 @@ class Keyed:
 
     __slots__ = ()
 
-    def __getitem__(self, name: Union[str, int]) -> 'Item':
+    def __getitem__(self, name: Union[str, int, slice]) -> 'Item':
+        if isinstance(name, slice):
+            return ColumnSlice(self, name.start, name.stop)
         return Item(self, name)
 
     def __getattr__(self, name: str) -> 'Attribute':
@@ -26,13 +28,15 @@ class Keyed:
 
 
 RawScalar = (
-    str, int, float, np.str_, np.bytes_, np.integer, np.floating, type(None)
+    str, int, float, np.str_, np.bytes_, np.integer, np.floating, type(None),
+    slice
 )
 Scalar = Optional[Union[
-    str, int, float, np.str_, np.bytes_, np.integer, np.floating
+    str, int, float, np.str_, np.bytes_, np.integer, np.floating, slice
 ]]
 Operand = Optional[Union[
-    'Value', str, int, float, np.str_, np.bytes_, np.integer, np.floating, None
+    'Value', str, int, float, np.str_, np.bytes_, np.integer, np.floating,
+    None, slice
 ]]
 Scope = Dict['Value', ir.Expr]
 
@@ -298,7 +302,7 @@ class Getter(Value):
     def index(self) -> Value:
         return self.exprs[1]
 
-    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.Expr:
+    def resolve(self, expr: ir.Expr, scope: Scope) -> ir.ColumnExpr:
         try:
             result = scope[self.expr]
         except KeyError:
@@ -327,6 +331,28 @@ class Item(Getter):
 
     def __repr__(self) -> str:
         return '{}[{!r}]'.format(self.exprs[0], self.exprs[1].exprs[0])
+
+
+class ColumnSlice(Item):
+
+    __slots__ = 'start', 'stop'
+
+    def __init__(self, expr: Keyed, start: str, stop: Optional[str]) -> None:
+        self.start = start
+        self.stop = stop
+
+    def __repr__(self) -> str:
+        if self.stop is None:
+            return '{}:'.format(self.start)
+        return '{}:{}'.format(self.start, self.stop)
+
+    def resolve(self, expr: ir.Expr, scope: Scope) -> List[ir.ColumnExpr]:
+        schema = expr.schema()
+        columns = schema.names
+        name_locs = schema._name_locs
+        start = name_locs[self.start]
+        stop = name_locs.get(self.stop, len(expr.columns) - 1) + 1  # inclusive
+        return [expr[columns[i]] for i in range(start, stop)]
 
 
 X = Value()

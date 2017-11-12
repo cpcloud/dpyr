@@ -1,4 +1,5 @@
 import operator
+import itertools
 
 from typing import Union, Callable
 
@@ -136,9 +137,10 @@ class select(Verb):
             }
         else:
             scope = {X: expr}
-        return expr.projection([
-            column.resolve(expr, scope) for column in self.columns
-        ])
+        return expr.projection(list(itertools.chain.from_iterable(
+            ibis.util.promote_list(column.resolve(expr, scope))
+            for column in self.columns
+        )))
 
 
 class sift(Verb):
@@ -264,9 +266,10 @@ class sort_by(Verb):
         self.sort_keys = sort_keys
 
     def __call__(self, expr: ir.TableExpr) -> ir.TableExpr:
-        return expr.sort_by([
-            key.resolve(expr, {X: expr}) for key in self.sort_keys
-        ])
+        return expr.sort_by(list(itertools.chain.from_iterable(
+            ibis.util.promote_list(key.resolve(expr, {X: expr}))
+            for key in self.sort_keys
+        )))
 
 
 class join(Verb):
@@ -349,6 +352,16 @@ class cast(Value):
 
     def resolve(self, table: ir.TableExpr, scope: Scope) -> ir.ValueExpr:
         return self.expr.resolve(table, {X: table}).cast(self.to)
+
+
+class nullif(Binary):
+
+    __slots__ = ()
+
+    def operate(
+        self, arg: ir.ValueExpr, matches: ir.ValueExpr
+    ) -> ir.ValueExpr:
+        return arg.nullif(matches)
 
 
 Result = Union[pd.DataFrame, pd.Series, Scalar]
